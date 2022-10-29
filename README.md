@@ -90,10 +90,12 @@ The directory should be organized in the following structure:
     # Obtaining category-agnostic 2D object detection results first.
     # Increasing the `n_ref_view` will improve the detection robustness but with the cost of slowing down the initialization speed.
     python feature_matching_object_detector.py +experiment=object_detector.yaml n_ref_view=15
+    #This command takes less time and only uses the sample dataset
     python feature_matching_object_detector.py +experiment=object_detector_2.yaml n_ref_view=2
 
     # Running pose estimation with `object_detect_mode` set to `feature_matching`.
     # Note that enabling visualization will slow down the inference.
+    #This inference only takes into consideration the sample data, if we want to apply it to the complete dataset, we need to set +experiment=test_GATsSPG_2.yaml
     python inference.py +experiment=test_GATsSPG_2.yaml object_detect_mode=feature_matching save_wis3d=True
     ```
 
