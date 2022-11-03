@@ -20,6 +20,12 @@
 conda env create -f environment.yaml
 conda activate onepose
 ```
+if you have a m1 chip run the following commands:
+```shell
+CONDA_SUBDIR=osx-64 conda env create -f environment.yaml
+conda activate onepose
+```
+
 We use [SuperPoint](https://github.com/magicleap/SuperPointPretrainedNetwork) and [SuperGlue](https://github.com/magicleap/SuperPointPretrainedNetwork) 
 for 2D feature detection and matching in this project.
 We can't provide the code directly due its LICENSE requirements, please download the inference code and pretrained models using the following script：
