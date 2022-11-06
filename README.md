@@ -70,7 +70,7 @@ The directory should be organized in the following structure:
 
 3. Run Structure-from-Motion for the data sequences
 
-    Reconstructed the object point cloud and 2D-3D correspondences are needed for both training and test objects:
+    Reconstructed the object point cloud and 2D-3D correspondences are needed for both training and test objects (if you haven't run the sfm befor remember to set the  "redo" fields to true in config files in hydra and configs):
     ```python
     python run.py +preprocess=sfm_spp_spg_train.yaml # for training data
     python run.py +preprocess=sfm_spp_spg_test.yaml # for testing data
@@ -78,6 +78,7 @@ The directory should be organized in the following structure:
     python run.py +preprocess=sfm_spp_spg_sample.yaml # an example, if you don't want to test the full dataset
     python run.py +preprocess=sfm_spp_spg_test_experiment.yaml
     ```
+
 
 ### Inference on OnePose dataset
 1. Download the pretrain weights [pretrained model](https://drive.google.com/drive/folders/1VjLLjJ9oxjKV5Xy3Aty0uQUVwyEhgtIE?usp=sharing) and move it to `${REPO_ROOT}/data/model/checkpoints/onepose/GATsSPG.ckpt`.
@@ -148,38 +149,3 @@ All model weights will be saved under `${REPO_ROOT}/data/models/checkpoints/${ex
 ```shell
 tensorboard xx
 ``` -->
-
-## Citation
-If you find this code useful for your research, please use the following BibTeX entry.
-
-```bibtex
-@article{sun2022onepose,
-	title={{OnePose}: One-Shot Object Pose Estimation without {CAD} Models},
-	author = {Sun, Jiaming and Wang, Zihao and Zhang, Siyu and He, Xingyi and Zhao, Hongcheng and Zhang, Guofeng and Zhou, Xiaowei},
-	journal={CVPR},
-	year={2022},
-}
-```
-
-## Copyright
-
-This work is affiliated with ZJU-SenseTime Joint Lab of 3D Vision, and its intellectual property belongs to SenseTime Group Ltd.
-
-```
-Copyright SenseTime. All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-```
-
-## Acknowledgement
-Part of our code is borrowed from [hloc](https://github.com/cvg/Hierarchical-Localization) and [SuperGlue](https://github.com/magicleap/SuperGluePretrainedNetwork), thanks to their authors for the great works.

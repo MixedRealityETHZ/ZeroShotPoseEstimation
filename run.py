@@ -136,7 +136,15 @@ def sfm_core(cfg, img_lists, outputs_dir_root):
 
         # Reconstruct 3D point cloud with known image poses:
         generate_empty.generate_model(img_lists, empty_dir)
-        triangulation.main(deep_sfm_dir, empty_dir, outputs_dir, covis_pairs_out, feature_out, matches_out, image_dir=None)
+        triangulation.main(deep_sfm_dir, 
+            empty_dir, 
+            outputs_dir, 
+            covis_pairs_out, 
+            feature_out, 
+            matches_out, 
+            image_dir=None,
+            skip_geometric_verification=True
+            )
     
     
 def postprocess(cfg, img_lists, root_dir, outputs_dir_root):

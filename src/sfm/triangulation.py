@@ -15,11 +15,12 @@ def names_to_pair(name0, name1):
     return '_'.join((name0.replace('/', '-'), name1.replace('/', '-')))
 
 
-def geometric_verification(colmap_path, database_path, pairs_path):
+def geometric_verification(colmap_path, database_path, pairs_path, use_gpu=0):
     """ Geometric verfication """
     logging.info('Performing geometric verification of the matches...')
     cmd = [
         str(colmap_path), 'matches_importer',
+        '--SiftMatching.use_gpu', str(use_gpu),
         '--database_path', str(database_path),
         '--match_list_path', str(pairs_path),
         '--match_type', 'pairs'
@@ -131,8 +132,8 @@ def run_triangulation(colmap_path, model_path, database_path, image_dir, empty_m
     logging.info(' '.join(cmd))
     ret = subprocess.call(cmd)
     if ret != 0:
-        logging.warning('Problem with point_triangulator, existing.')
-        exit(ret)
+       logging.warning('Problem with point_triangulator, existing.')
+       exit(ret)
     
     stats_raw = subprocess.check_output(
         [str(colmap_path), 'model_analyzer', '--path', model_path]

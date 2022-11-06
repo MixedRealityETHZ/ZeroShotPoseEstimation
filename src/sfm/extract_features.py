@@ -5,6 +5,9 @@ import logging
 
 from torch.utils.data import DataLoader
 
+device = "cpu" # setting device for all
+
+
 confs = {
     'superpoint': {
         'output': 'feats-spp',
@@ -34,7 +37,8 @@ def spp(img_lists, feature_out, cfg):
     from src.datasets.normalized_dataset import NormalizedDataset
     
     conf = confs[cfg.network.detection]
-    model = spp_det(conf['conf']).cuda()
+    #model = spp_det(conf['conf']).cuda()
+    model = spp_det(conf['conf']).to(device)
     model.eval()
     load_network(model, cfg.network.detection_model_path, force=True)
 
@@ -44,7 +48,8 @@ def spp(img_lists, feature_out, cfg):
     feature_file = h5py.File(feature_out, 'w')
     logging.info(f'Exporting features to {feature_out}')
     for data in tqdm.tqdm(loader):
-        inp = data['image'].cuda()
+        #inp = data['image'].cuda()
+        inp = data['image'].to(device)
         pred = model(inp)
 
         pred = {k: v[0].cpu().numpy() for k, v in pred.items()}

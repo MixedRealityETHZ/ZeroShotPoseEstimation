@@ -340,7 +340,8 @@ def get_kpt_ann(cfg, img_lists, feature_file_path, outputs_dir, points_idxs, xyz
     model_dir, anno_out_dir = get_default_path(cfg, outputs_dir)
 
     cameras, images, points3D = read_write_model.read_model(model_dir, ext='.bin')
-    features = h5py.File(feature_file_path, 'r')
+    #features = h5py.File(feature_file_path, 'r')
+    features = h5py.File(feature_file_path)
 
     kp3d_id_mapping = id_mapping(points_idxs)
     feature_dim, kp3d_id_position, kp3d_id_feature, kp3d_id_score, kp3d_id_image, kp3d_idx_to_img_kp2d_idx \

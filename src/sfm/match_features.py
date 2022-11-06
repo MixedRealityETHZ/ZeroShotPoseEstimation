@@ -5,6 +5,8 @@ import tqdm
 
 import os.path as osp
 
+device = "cpu"
+
 confs = {
     'superglue': {
         'output': 'matches-spg',
@@ -37,7 +39,7 @@ def spg(cfg, feature_path, covis_pairs, matches_out, vis_match=False):
     
     # load superglue model
     conf = confs[cfg.network.matching]['conf']
-    model = spg_matcher(conf).cuda()
+    model = spg_matcher(conf).to(device)
     model.eval()
     load_network(model, cfg.network.matching_model_path, force=True)
 
@@ -48,8 +50,7 @@ def spg(cfg, feature_path, covis_pairs, matches_out, vis_match=False):
         name0, name1 = pair.split(' ')
         pair = names_to_pair(name0, name1)
 
-        if len({(name0, name1), (name1, name0)} & matched) \
-            or pair in match_file:
+        if len({(name0, name1), (name1, name0)} & matched) or pair in match_file:
             continue
         
         data = {}
@@ -58,7 +59,7 @@ def spg(cfg, feature_path, covis_pairs, matches_out, vis_match=False):
             data[k+'0'] = feats0[k].__array__()
         for k in feats1.keys():
             data[k+'1'] = feats1[k].__array__()
-        data = {k: torch.from_numpy(v)[None].float().cuda() for k, v in data.items()}
+        data = {k: torch.from_numpy(v)[None].float().to(device) for k, v in data.items()}
         
         data['image0'] = torch.empty((1, 1, ) + tuple(feats0['image_size'])[::-1])
         data['image1'] = torch.empty((1, 1, ) + tuple(feats1['image_size'])[::-1])
@@ -83,7 +84,7 @@ def spg(cfg, feature_path, covis_pairs, matches_out, vis_match=False):
         
         if vis_match:
             vis_match_pairs(pred, feats0, feats1, name0, name1)
-    
+
     match_file.close()
     logging.info('Finishing exporting matches.')
 
