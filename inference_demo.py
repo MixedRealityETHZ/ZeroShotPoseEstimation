@@ -13,12 +13,12 @@ from src.utils import data_utils, path_utils, eval_utils, vis_utils
 from src.utils.model_io import load_network
 from src.local_feature_2D_detector import LocalFeatureObjectDetector
 
-from src.tracker.ba_tracker import BATracker
-
 from pytorch_lightning import seed_everything
 
 seed_everything(12345)
-
+device = "cpu"
+if device == "cpu":
+    logger.info("Running OnePose with cpu")
 
 def get_default_paths(cfg, data_root, data_dir, sfm_model_dir):
     anno_dir = osp.join(
@@ -80,7 +80,7 @@ def load_model(cfg):
         from src.models.GATsSPG_lightning_model import LitModelGATsSPG
 
         trained_model = LitModelGATsSPG.load_from_checkpoint(checkpoint_path=model_path)
-        trained_model.cuda()
+        trained_model.to(device)
         trained_model.eval()
 
         return trained_model
@@ -91,7 +91,7 @@ def load_model(cfg):
         from src.sfm.extract_features import confs
 
         extractor_model = SuperPoint(confs[cfg.network.detection]["conf"])
-        extractor_model.cuda()
+        extractor_model.to(device)
         extractor_model.eval()
         load_network(extractor_model, model_path, force=True)
 
@@ -122,11 +122,11 @@ def pack_data(avg_descriptors3d, clt_descriptors, keypoints3d, detection, image_
     descriptors2d = torch.Tensor(detection["descriptors"])
 
     inp_data = {
-        "keypoints2d": keypoints2d[None].cuda(),  # [1, n1, 2]
-        "keypoints3d": keypoints3d[None].cuda(),  # [1, n2, 3]
-        "descriptors2d_query": descriptors2d[None].cuda(),  # [1, dim, n1]
-        "descriptors3d_db": avg_descriptors3d[None].cuda(),  # [1, dim, n2]
-        "descriptors2d_db": clt_descriptors[None].cuda(),  # [1, dim, n2*num_leaf]
+        "keypoints2d": keypoints2d[None].to(device),  # [1, n1, 2]
+        "keypoints3d": keypoints3d[None].to(device),  # [1, n2, 3]
+        "descriptors2d_query": descriptors2d[None].to(device),  # [1, dim, n1]
+        "descriptors3d_db": avg_descriptors3d[None].to(device),  # [1, dim, n2]
+        "descriptors2d_db": clt_descriptors[None].to(device),  # [1, dim, n2*num_leaf]
         "image_size": image_size,
     }
 
@@ -138,6 +138,7 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
     from src.datasets.normalized_dataset import NormalizedDataset
     from src.sfm.extract_features import confs
     if cfg.use_tracking:
+        from src.tracker.ba_tracker import BATracker
         logger.warning("The tracking module is under development. "
                        "Running OnePose inference without tracking instead.")
         tracker = BATracker(cfg)
@@ -177,7 +178,7 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
     clt_data = np.load(paths["clt_anno_3d_path"])
     idxs = np.load(paths["idxs_path"])
 
-    keypoints3d = torch.Tensor(clt_data["keypoints3d"]).cuda()
+    keypoints3d = torch.Tensor(clt_data["keypoints3d"]).to(device)
     num_3d = keypoints3d.shape[0]
     # load average 3D features:
     avg_descriptors3d, _ = data_utils.pad_features3d_random(
@@ -193,7 +194,7 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
     for id, data in enumerate(tqdm(loader)):
         with torch.no_grad():
             img_path = data["path"][0]
-            inp = data["image"].cuda()
+            inp = data["image"].to(device)
 
             # Detect object:
             if id == 0:

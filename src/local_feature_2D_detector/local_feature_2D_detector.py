@@ -7,6 +7,7 @@ from src.utils.colmap.read_write_model import read_model
 from src.utils.data_utils import get_K_crop_resize, get_image_crop_resize
 from src.utils.vis_utils import reproj
 
+device = "cpu"
 
 def pack_extract_data(img_path):
     image = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
@@ -15,13 +16,13 @@ def pack_extract_data(img_path):
     return torch.Tensor(image)
 
 
-def pack_match_data(db_detection, query_detection, db_size, query_size):
+def pack_match_data(db_detection, query_detection, db_size, query_size, device=device):
     data = {}
     for k in db_detection.keys():
         data[k + "0"] = db_detection[k].__array__()
     for k in query_detection.keys():
         data[k + "1"] = query_detection[k].__array__()
-    data = {k: torch.from_numpy(v)[None].float().cuda() for k, v in data.items()}
+    data = {k: torch.from_numpy(v)[None].float().to(device) for k, v in data.items()}
 
     data["image0"] = torch.empty(
         (
@@ -41,9 +42,18 @@ def pack_match_data(db_detection, query_detection, db_size, query_size):
 
 
 class LocalFeatureObjectDetector():
-    def __init__(self, extractor, matcher, sfm_ws_dir, n_ref_view=15, output_results=False, detect_save_dir=None, K_crop_save_dir=None):
-        self.extractor = extractor.cuda()
-        self.matcher = matcher.cuda()
+    def __init__(self, 
+                extractor,
+                 matcher, 
+                 sfm_ws_dir, 
+                 n_ref_view=15, 
+                 output_results=False, 
+                 detect_save_dir=None, 
+                 K_crop_save_dir=None,
+                 device="cpu"):
+        self.device = device
+        self.extractor = extractor.to(self.device)
+        self.matcher = matcher.to(self.device)
         self.db_dict = self.extract_ref_view_features(sfm_ws_dir, n_ref_view)
         self.output_results = output_results
         self.detect_save_dir = detect_save_dir
@@ -63,7 +73,7 @@ class LocalFeatureObjectDetector():
             db_img = pack_extract_data(db_img_path)
 
             # Detect DB image keypoints:
-            db_inp = db_img[None].cuda()
+            db_inp = db_img[None].to(self.device)
             db_detection = self.extractor(db_inp)
             db_detection = {
                 k: v[0].detach().cpu().numpy() for k, v in db_detection.items()
@@ -206,9 +216,9 @@ class LocalFeatureObjectDetector():
             cropped_K: np.ndarray[3*3];
         """
         if len(query_img.shape) != 4:
-            query_inp = query_img[None].cuda()
+            query_inp = query_img[None].to(self.device)
         else:
-            query_inp = query_img.cuda()
+            query_inp = query_img.to(self.device)
         
         # Extract query image features:
         query_inp = self.extractor(query_inp)
@@ -225,7 +235,7 @@ class LocalFeatureObjectDetector():
 
         # To Tensor:
         image_crop = image_crop.astype(np.float32) / 255
-        image_crop_tensor = torch.from_numpy(image_crop)[None][None].cuda()
+        image_crop_tensor = torch.from_numpy(image_crop)[None][None].to(self.device)
 
         return bbox, image_crop_tensor, K_crop
     
@@ -254,6 +264,6 @@ class LocalFeatureObjectDetector():
 
         # To Tensor:
         image_crop = image_crop.astype(np.float32) / 255
-        image_crop_tensor = torch.from_numpy(image_crop)[None][None].cuda()
+        image_crop_tensor = torch.from_numpy(image_crop)[None][None].to(device)
 
         return bbox, image_crop_tensor, K_crop

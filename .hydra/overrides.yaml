@@ -1,0 +1,6 @@
+- +experiment=test_demo
+- use_tracking=False
+- input.data_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/onepose_datasets/test_coffee
+  test_coffee-test
+- input.sfm_model_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/sfm_model
+- use_tracking=False
