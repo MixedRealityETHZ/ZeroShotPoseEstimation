@@ -14,6 +14,7 @@ import time
 # TODO: make parameters globally setted by user
 # TODO: use pathlib.Path for path setting
 
+extract_video = False
 video_path = "./IMG_6943.MOV"
 images_folder = "/images"
 imlist_folder = "/lists"
@@ -38,8 +39,9 @@ full_seg_dir = default_data_path + full_segmentations
 #Before running this example, you should already have the list of images and the images per frame from the video
 #You can get this by running the normal DSM applied to the video recorded by Roberto
 
-images_extracting.extract_images(video_path, images_root)
-images_extracting.write_images_txt(imlist_root, file_txt, images_root)
+if extract_video:
+    images_extracting.extract_images(video_path, images_root)
+    images_extracting.write_images_txt(imlist_root, file_txt, images_root)
 
 # list files in img directory, this is the txt file containing the name of all images
 filenames = Path(images_list).read_text().splitlines()

@@ -76,8 +76,8 @@ def extract_features(
 
 
     # Prepare
-    # accelerator = Accelerator(fp16=True, cpu=False)
-    accelerator = Accelerator(fp16=False, cpu=True)
+    # accelerator = Accelerator(mixed_precision=True, cpu=False)
+    accelerator = Accelerator(mixed_precision=False, cpu=True)
     # model, dataloader = accelerator.prepare(model, dataloader)
     model = model.to(accelerator.device)
 
@@ -788,7 +788,7 @@ def _extract_crf_segmentations(
     # Output file
     #id = Path(image_file).stem
     
-    output_file = str(Path(output_dir) / f"{id}.png")
+    #output_file = str(Path(output_dir) / f"{id}.png")
 
     #image = np.array(Image(image_file).convert("RGB"))  # (H_patch, W_patch, 3)
     image = np.array(image_file)
@@ -828,7 +828,7 @@ def _extract_crf_segmentations(
     # Save
     segmented_im = Image.fromarray(segmap_crf).convert("L")
     
-    plt.imsave(output_file, segmented_im)
+    #plt.imsave(output_file, segmented_im)
     '''
     orig_image = image_file
     
