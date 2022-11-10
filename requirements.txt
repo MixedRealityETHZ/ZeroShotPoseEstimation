@@ -1,9 +1,13 @@
 accelerate
 fire
-opencv-python-headless
+opencv-python
 pillow
 scikit-image
 scipy
 torch
 torchvision
 tqdm
+pymatting
+scikit-learn
+SimpleCRF
+matplotlib
