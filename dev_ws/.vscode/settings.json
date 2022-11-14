@@ -1,0 +1,12 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/workspaces/test_ws/build/test_pkg",
+        "/workspaces/test_ws/install/test_pkg/lib/python3.8/site-packages",
+        "/opt/ros/foxy/lib/python3.8/site-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/workspaces/test_ws/build/test_pkg",
+        "/workspaces/test_ws/install/test_pkg/lib/python3.8/site-packages",
+        "/opt/ros/foxy/lib/python3.8/site-packages"
+    ]
+}
