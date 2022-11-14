@@ -17,9 +17,9 @@ network:
   matching: superglue
 max_num_kp3d: 2500
 input:
-  data_dirs: /Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/onepose_datasets/test_coffee
-    test_coffee-test
-  sfm_model_dirs: /Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/sfm_model
+  data_dirs: /Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/onepose_datasets/test_moccona
+    test_moccona-test
+  sfm_model_dirs: /Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/sfm_model/test_moccona
 output:
   vis_dir: ${work_dir}/runs/vis/demo
   eval_dir: ${work_dir}/runs/eval/demo

@@ -16,9 +16,15 @@ from src.local_feature_2D_detector import LocalFeatureObjectDetector
 from pytorch_lightning import seed_everything
 
 seed_everything(12345)
+
 device = "cpu"
-if device == "cpu":
-    logger.info("Running OnePose with cpu")
+if device == "mps":
+    logger.info("Running OnePose with MPS")
+elif device == "cpu":
+    logger.info("Running OnePose with CPU")
+elif device == "cuda":
+    logger.info("Running OnePose with GPU, will it work?")
+
 
 def get_default_paths(cfg, data_root, data_dir, sfm_model_dir):
     anno_dir = osp.join(
@@ -37,7 +43,7 @@ def get_default_paths(cfg, data_root, data_dir, sfm_model_dir):
     img_lists = []
     color_dir = osp.join(data_dir, "color_full")
     img_lists += glob.glob(color_dir + "/*.png", recursive=True)
-    
+
     img_lists = natsort.natsorted(img_lists)
 
     # Visualize detector:
@@ -137,10 +143,14 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
     """Inference & visualize"""
     from src.datasets.normalized_dataset import NormalizedDataset
     from src.sfm.extract_features import confs
+
     if cfg.use_tracking:
         from src.tracker.ba_tracker import BATracker
-        logger.warning("The tracking module is under development. "
-                       "Running OnePose inference without tracking instead.")
+
+        logger.warning(
+            "The tracking module is under development. "
+            "Running OnePose inference without tracking instead."
+        )
         tracker = BATracker(cfg)
         track_interval = 5
     else:
@@ -152,9 +162,11 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
     img_lists, paths = get_default_paths(cfg, data_root, seq_dir, sfm_model_dir)
 
     # sort images
-    im_ids = [int(osp.basename(i).replace('.png', '')) for i in img_lists]
+    im_ids = [int(osp.basename(i).replace(".png", "")) for i in img_lists]
     im_ids.sort()
-    img_lists = [osp.join(osp.dirname(img_lists[0]), f'{im_id}.png') for im_id in im_ids]
+    img_lists = [
+        osp.join(osp.dirname(img_lists[0]), f"{im_id}.png") for im_id in im_ids
+    ]
 
     K, _ = data_utils.get_K(paths["intrin_full_path"])
     box3d_path = path_utils.get_3d_box_path(data_root)
@@ -199,7 +211,9 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
             # Detect object:
             if id == 0:
                 # Detect object by 2D local feature matching for the first frame:
-                bbox, inp_crop, K_crop = local_feature_obj_detector.detect(inp, img_path, K)
+                bbox, inp_crop, K_crop = local_feature_obj_detector.detect(
+                    inp, img_path, K
+                )
             else:
                 # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
                 previous_frame_pose, inliers = pred_poses[id - 1]
@@ -249,17 +263,19 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
 
             # Store previous estimated poses:
             pred_poses[id] = [pose_pred, inliers]
-            image_crop = np.asarray((inp_crop * 255).squeeze().cpu().numpy(), dtype=np.uint8)
+            image_crop = np.asarray(
+                (inp_crop * 255).squeeze().cpu().numpy(), dtype=np.uint8
+            )
 
         if cfg.use_tracking:
             frame_dict = {
-                'im_path': image_crop,
-                'kpt_pred': pred_detection,
-                'pose_pred': pose_pred_homo,
-                'pose_gt': pose_pred_homo,
-                'K': K_crop,
-                'K_crop': K_crop,
-                'data': data
+                "im_path": image_crop,
+                "kpt_pred": pred_detection,
+                "pose_pred": pose_pred_homo,
+                "pose_gt": pose_pred_homo,
+                "K": K_crop,
+                "K_crop": K_crop,
+                "data": data,
             }
 
             use_update = id % track_interval == 0
@@ -275,19 +291,18 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
                 kpt3d_ids = matches[valid][inliers.flatten()]
 
                 kf_dict = {
-                    'im_path': image_crop,
-                    'kpt_pred': pred_detection,
-                    'valid_mask': valid,
-                    'mkpts2d': mkpts2d_q_inlier,
-                    'mkpts3d': mkpts3d_db_inlier,
-                    'kpt3d_full': kpts3d_full,
-                    'inliers': inliers,
-                    'kpt3d_ids': kpt3d_ids,
-
-                    'valid_query_id': valid_query_id,
-                    'pose_pred': pose_pred_homo,
-                    'pose_gt': pose_pred_homo,
-                    'K': K_crop
+                    "im_path": image_crop,
+                    "kpt_pred": pred_detection,
+                    "valid_mask": valid,
+                    "mkpts2d": mkpts2d_q_inlier,
+                    "mkpts3d": mkpts3d_db_inlier,
+                    "kpt3d_full": kpts3d_full,
+                    "inliers": inliers,
+                    "kpt3d_ids": kpt3d_ids,
+                    "valid_query_id": valid_query_id,
+                    "pose_pred": pose_pred_homo,
+                    "pose_gt": pose_pred_homo,
+                    "K": K_crop,
                 }
 
                 need_update = not tracker.update_kf(kf_dict)

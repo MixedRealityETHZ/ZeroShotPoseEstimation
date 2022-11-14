@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .GATs import GraphAttentionLayer
 
+# set PYTORCH_ENABLE_MPS_FALLBACK=1
 
 def arange_like(x, dim: int):
     return x.new_ones(x.shape[dim]).cumsum(0) - 1

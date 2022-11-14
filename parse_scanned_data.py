@@ -8,20 +8,23 @@ from pathlib import Path
 from transforms3d import affines, quaternions
 from src.utils import data_utils
 
-def get_arkit_default_path(data_dir):
+
+def get_arkit_default_path(data_dir, AR_annotations=True):
     video_file = osp.join(data_dir, 'Frames.m4v')
 
     color_dir = osp.join(data_dir, 'color')
     Path(color_dir).mkdir(parents=True, exist_ok=True)
-
+    
     box_file = osp.join(data_dir, 'Box.txt')
-    assert Path(box_file).exists()
     out_3D_box_dir = osp.join(osp.dirname(data_dir), 'box3d_corners.txt')
 
     out_pose_dir = osp.join(data_dir, 'poses')
     Path(out_pose_dir).mkdir(parents=True, exist_ok=True)
     pose_file = osp.join(data_dir, 'ARposes.txt')
-    assert Path(pose_file).exists()
+
+    if AR_annotations:
+        assert Path(box_file).exists()
+        assert Path(pose_file).exists()
 
     reproj_box_dir = osp.join(data_dir, 'reproj_box')
     Path(reproj_box_dir).mkdir(parents=True, exist_ok=True)
@@ -104,6 +107,7 @@ def get_bbox3d(box_path):
     bbox_3d_homo = np.concatenate([bbox_3d, np.ones((8, 1))], axis=1)
     return bbox_3d, bbox_3d_homo
 
+
 def parse_box(box_path):
     with open(box_path, 'r') as f:
         lines = f.readlines()
@@ -126,7 +130,7 @@ def reproj(K_homo, pose, points3d_homo):
     return reproj_points # [n, 2]
 
 
-def parse_video(paths, downsample_rate=5, bbox_3d_homo=None, hw=512):
+def parse_video(paths, downsample_rate=5, bbox_3d_homo=None, hw=512, AR_annotations=True):
     orig_intrin_file = paths['final_intrin_file']
     K, K_homo = data_utils.get_K(orig_intrin_file)
 
@@ -140,10 +144,15 @@ def parse_video(paths, downsample_rate=5, bbox_3d_homo=None, hw=512):
         if index % downsample_rate == 0:
             img_name = osp.join(paths['color_dir'], '{}.png'.format(index))
             save_intrin_path = osp.join(intrin_dir, '{}.txt'.format(index))
-
             reproj_box3d_file = osp.join(paths['reproj_box_dir'], '{}.txt'.format(index))
+
+            full_img_dir = paths['color_dir'] + '_full'
+            Path(full_img_dir).mkdir(exist_ok=True, parents=True)
+            cv2.imwrite(osp.join(full_img_dir, '{}.png'.format(index)), image)
+
             if not osp.isfile(reproj_box3d_file):
                 continue
+
             reproj_box3d = np.loadtxt(osp.join(paths['reproj_box_dir'], '{}.txt'.format(index))).astype(int)
             x0, y0 = reproj_box3d.min(0)
             x1, y1 = reproj_box3d.max(0)
@@ -164,25 +173,25 @@ def parse_video(paths, downsample_rate=5, bbox_3d_homo=None, hw=512):
             np.savetxt(osp.join(paths['M_dir'], '{}.txt'.format(index)), trans_crop_to_full)
 
             pose = np.loadtxt(osp.join(paths['out_pose_dir'], '{}.txt'.format(index)))
-            reproj_crop = reproj(K_crop_homo, pose, bbox_3d_homo.T)
-            x0_new, y0_new = reproj_crop.min(0)
-            x1_new, y1_new = reproj_crop.max(0)
-            box_new = np.array([x0_new, y0_new, x1_new, y1_new])
+            if AR_annotations:
+                reproj_crop = reproj(K_crop_homo, pose, bbox_3d_homo.T)
+                x0_new, y0_new = reproj_crop.min(0)
+                x1_new, y1_new = reproj_crop.max(0)
+                box_new = np.array([x0_new, y0_new, x1_new, y1_new])
 
-            np.savetxt(osp.join(paths['out_box_dir'], '{}.txt'.format(index)), box_new)
-            cv2.imwrite(img_name, image_crop)
-            # cv2.imwrite(out_mask_file, mask_crop)
-            full_img_dir = paths['color_dir'] + '_full'
-            Path(full_img_dir).mkdir(exist_ok=True, parents=True)
-            cv2.imwrite(osp.join(full_img_dir, '{}.png'.format(index)), image)
+                np.savetxt(osp.join(paths['out_box_dir'], '{}.txt'.format(index)), box_new)
+                cv2.imwrite(img_name, image_crop)
+                # cv2.imwrite(out_mask_file, mask_crop)
+            
             np.savetxt(save_intrin_path, K_crop)
 
         index += 1
     cap.release()
 
 
-def data_process_anno(data_dir, downsample_rate=1, hw=512):
-    paths = get_arkit_default_path(data_dir)
+def data_process_anno(data_dir, downsample_rate=1, hw=512, AR_annotations=True):
+
+    paths = get_arkit_default_path(data_dir, AR_annotations)
     with open(paths['orig_intrin_file'], 'r') as f:
         lines = [l.strip() for l in f.readlines() if len(l) > 0 and l[0] != '#']
     eles = [[float(e) for e in l.split(',')] for l in lines]
@@ -191,53 +200,57 @@ def data_process_anno(data_dir, downsample_rate=1, hw=512):
     with open(paths['final_intrin_file'], 'w') as f:
         f.write('fx: {0}\nfy: {1}\ncx: {2}\ncy: {3}'.format(fx, fy, cx, cy))
 
-    bbox_3d, bbox_3d_homo = get_bbox3d(paths['box_path'])
-    np.savetxt(paths['out_3D_box_dir'], bbox_3d)
-
     K_homo = np.array([
         [fx, 0, cx, 0],
         [0, fy, cy, 0],
         [0,  0,  1, 0]
     ])
-    with open(paths['pose_file'], 'r') as f:
-        lines = [l.strip() for l in f.readlines()]
-        index = 0
-        for line in tqdm.tqdm(lines):
-            if len(line) == 0 or line[0] == '#':
-                continue
 
-            if index % downsample_rate == 0:
-                eles = line.split(',')
-                data = [float(e) for e in eles]
+    if AR_annotations:
+        bbox_3d, bbox_3d_homo = get_bbox3d(paths['box_path'])
+        np.savetxt(paths['out_3D_box_dir'], bbox_3d)
 
-                position = data[1:4]
-                quaternion = data[4:]
-                rot_mat = quaternions.quat2mat(quaternion)
-                rot_mat = rot_mat @ np.array([
-                    [1,  0,  0],
-                    [0, -1,  0],
-                    [0,  0, -1]
-                ])
-
-                T_ow = parse_box(paths['box_path'])
-                T_cw = affines.compose(position, rot_mat, np.ones(3))
-                T_wc = np.linalg.inv(T_cw)
-                T_oc = T_wc @ T_ow
-                pose_save_path = osp.join(paths['out_pose_dir'], '{}.txt'.format(index))
-                box_save_path = osp.join(paths['reproj_box_dir'], '{}.txt'.format(index))
-                reproj_box3d = reproj(K_homo, T_oc, bbox_3d_homo.T)
-
-                x0, y0 = reproj_box3d.min(0)
-                x1, y1 = reproj_box3d.max(0)
-
-                if x0 < -1000 or y0 < -1000 or x1 > 3000 or y1 > 3000:
+        with open(paths['pose_file'], 'r') as f:
+            lines = [l.strip() for l in f.readlines()]
+            index = 0
+            for line in tqdm.tqdm(lines):
+                if len(line) == 0 or line[0] == '#':
                     continue
 
-                np.savetxt(pose_save_path, T_oc)
-                np.savetxt(box_save_path, reproj_box3d)
-            index += 1
+                if index % downsample_rate == 0:
+                    eles = line.split(',')
+                    data = [float(e) for e in eles]
 
-    parse_video(paths, downsample_rate, bbox_3d_homo, hw=hw)
+                    position = data[1:4]
+                    quaternion = data[4:]
+                    rot_mat = quaternions.quat2mat(quaternion)
+                    rot_mat = rot_mat @ np.array([
+                        [1,  0,  0],
+                        [0, -1,  0],
+                        [0,  0, -1]
+                    ])
+
+                    T_ow = parse_box(paths['box_path']) # original coordinate of the box
+                    T_cw = affines.compose(position, rot_mat, np.ones(3)) # pose of the box now 
+                    T_wc = np.linalg.inv(T_cw)
+                    T_oc = T_wc @ T_ow # transformation from the (o)rigin to the (c)urrent frame
+                    pose_save_path = osp.join(paths['out_pose_dir'], '{}.txt'.format(index))
+                    box_save_path = osp.join(paths['reproj_box_dir'], '{}.txt'.format(index))
+                    reproj_box3d = reproj(K_homo, T_oc, bbox_3d_homo.T)
+
+                    x0, y0 = reproj_box3d.min(0)
+                    x1, y1 = reproj_box3d.max(0)
+
+                    if x0 < -1000 or y0 < -1000 or x1 > 3000 or y1 > 3000:
+                        continue
+
+                    np.savetxt(pose_save_path, T_oc)
+                    np.savetxt(box_save_path, reproj_box3d)
+                index += 1
+    else:
+        bbox_3d_homo = None
+
+    parse_video(paths, downsample_rate, bbox_3d_homo, hw=hw, AR_annotations=AR_annotations)
 
     # Make fake data for demo annotate video without BA:
     if osp.exists(osp.join(osp.dirname(paths['intrin_dir']), 'intrin_ba')):
@@ -279,12 +292,16 @@ def parse_args():
     )
 
     parser.add_argument("--scanned_object_path", type=str, required=True)
+    #parser.add_argument("--AR_annotations", type=bool, action=True)
 
     args = parser.parse_args()
     return args
 
 if __name__ == "__main__":
     args = parse_args()
+
+    AR_annotations = False
+
     data_dir = args.scanned_object_path
     assert osp.exists(data_dir), f"Scanned object path:{data_dir} not exists!"
 
@@ -292,7 +309,7 @@ if __name__ == "__main__":
     for seq_dir in seq_dirs:
         if '-annotate' in seq_dir:
             print('=> Processing annotate sequence: ', seq_dir)
-            data_process_anno(osp.join(data_dir, seq_dir), downsample_rate=1, hw=512)
+            data_process_anno(osp.join(data_dir, seq_dir), downsample_rate=1, hw=512, AR_annotations=AR_annotations)
         elif '-test' in seq_dir:
             # Parse scanned test sequence
             print('=> Processing test sequence: ', seq_dir)

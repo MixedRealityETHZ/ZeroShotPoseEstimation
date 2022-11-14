@@ -111,14 +111,13 @@ hydra:
     task:
     - +experiment=test_demo
     - use_tracking=False
-    - input.data_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/onepose_datasets/test_coffee
-      test_coffee-test
-    - input.sfm_model_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/sfm_model
-    - use_tracking=False
+    - input.data_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/onepose_datasets/test_moccona
+      test_moccona-test
+    - input.sfm_model_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/sfm_model/test_moccona
   job:
     name: inference_demo
-    override_dirname: +experiment=test_demo,input.data_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/onepose_datasets/test_coffee
-      test_coffee-test,input.sfm_model_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/sfm_model,use_tracking=False,use_tracking=False
+    override_dirname: +experiment=test_demo,input.data_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/onepose_datasets/test_moccona
+      test_moccona-test,input.sfm_model_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/deep-spectral-segmentation/data/sfm_model/test_moccona,use_tracking=False
     id: ???
     num: ???
     config_name: config.yaml
