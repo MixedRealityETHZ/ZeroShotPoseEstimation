@@ -149,3 +149,12 @@ All model weights will be saved under `${REPO_ROOT}/data/models/checkpoints/${ex
 ```shell
 tensorboard xx
 ``` -->
+
+# Additionals
+    1. Use video2img.py
+    python video2img.py --input=/Users/diego/Desktop/Escritorio_MacBook_Pro_de_Diego/ETH/Third_Semester/Mixed_Reality/OnePose/data/onepose_datasets/test_experiment/test_frames
+
+    2. Downsample the images probably with parse_scanned_data.py
+
+    Use for the box detection
+    path_utils uses intrin_ba folder, which contains txt files with the bounding boxes, maaybeee

@@ -15,7 +15,6 @@ from src.local_feature_2D_detector import LocalFeatureObjectDetector
 from pytorch_lightning import seed_everything
 
 seed_everything(12345)
-#Change cuda to cpu
 
 if torch.cuda.is_available():
   device = torch.device("cuda")
