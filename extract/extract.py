@@ -77,7 +77,8 @@ def extract_features(
 
     # Prepare
     # accelerator = Accelerator(mixed_precision=True, cpu=False)
-    accelerator = Accelerator(mixed_precision=False, cpu=True)
+    #accelerator = Accelerator(mixed_precision=False, cpu=True)
+    accelerator = Accelerator(mixed_precision='no', cpu=True)
     # model, dataloader = accelerator.prepare(model, dataloader)
     model = model.to(accelerator.device)
 
