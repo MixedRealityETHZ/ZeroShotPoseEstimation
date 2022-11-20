@@ -7,7 +7,6 @@ from torch.utils.data import DataLoader
 
 device = "cpu" # setting device for all
 
-
 confs = {
     'superpoint': {
         'output': 'feats-spp',

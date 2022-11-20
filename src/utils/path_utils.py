@@ -24,6 +24,10 @@ def get_gt_pose_path_by_color(color_path, det_type='GT_box'):
         return color_path.replace("/color/", "/poses_ba/").replace(
             ".png", ".txt"
         )
+    elif det_type == "no_ba":
+        return color_path.replace("/color/", "/poses/").replace(
+            ".png", ".txt"
+        )
     elif det_type == 'feature_matching':
         return color_path.replace("/color_det/", "/poses_ba/").replace(
             ".png", ".txt"
@@ -51,11 +55,18 @@ def get_intrin_path_by_color(color_path, det_type='GT_box'):
     else:
         raise NotImplementedError
 
-def get_intrin_dir(seq_root):
-    return osp.join(seq_root, "intrin_ba")
+def get_intrin_dir(seq_root, det_type):
+    if det_type=="no_ba":
+        return osp.join(seq_root, "intrin")
+    else:
+        return osp.join(seq_root, "intrin_ba")
 
-def get_gt_pose_dir(seq_root):
-    return osp.join(seq_root, "poses_ba")
+def get_gt_pose_dir(seq_root, det_type):
+    if det_type=="no_ba":
+        return osp.join(seq_root, "poses")
+    else:
+        return osp.join(seq_root, "poses_ba")
+
 
 def get_intrin_full_path(seq_root):
     return osp.join(seq_root, "intrinsics.txt")

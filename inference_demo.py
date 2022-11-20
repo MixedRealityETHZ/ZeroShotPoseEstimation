@@ -3,6 +3,7 @@ import torch
 import hydra
 from tqdm import tqdm
 import os
+import time
 import os.path as osp
 import numpy as np
 import natsort
@@ -10,20 +11,21 @@ import natsort
 from loguru import logger
 from torch.utils.data import DataLoader
 from src.utils import data_utils, path_utils, eval_utils, vis_utils
+from src.utils.bbox_3D_utils import compute_3dbbox_from_sfm
 from src.utils.model_io import load_network
 from src.local_feature_2D_detector import LocalFeatureObjectDetector
-
 from pytorch_lightning import seed_everything
 
 seed_everything(12345)
 
-device = "cpu"
-if device == "mps":
-    logger.info("Running OnePose with MPS")
-elif device == "cpu":
-    logger.info("Running OnePose with CPU")
-elif device == "cuda":
+
+if torch.cuda.is_available():
+    device = "cuda"
     logger.info("Running OnePose with GPU, will it work?")
+else:
+    device = "cpu"
+    logger.info("Running OnePose with CPU")
+
 
 
 def get_default_paths(cfg, data_root, data_dir, sfm_model_dir):
@@ -139,7 +141,7 @@ def pack_data(avg_descriptors3d, clt_descriptors, keypoints3d, detection, image_
     return inp_data
 
 
-def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
+def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="features"):
     """Inference & visualize"""
     from src.datasets.normalized_dataset import NormalizedDataset
     from src.sfm.extract_features import confs
@@ -164,18 +166,19 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
     # sort images
     im_ids = [int(osp.basename(i).replace(".png", "")) for i in img_lists]
     im_ids.sort()
-    img_lists = [
-        osp.join(osp.dirname(img_lists[0]), f"{im_id}.png") for im_id in im_ids
-    ]
+    img_lists = [osp.join(osp.dirname(img_lists[0]), f"{im_id}.png") for im_id in im_ids]
 
     K, _ = data_utils.get_K(paths["intrin_full_path"])
+    sfm_ws_dir=paths["sfm_ws_dir"]
+    bbox3d = compute_3dbbox_from_sfm(sfm_ws_dir=sfm_ws_dir, data_root=data_root)
     box3d_path = path_utils.get_3d_box_path(data_root)
-    bbox3d = np.loadtxt(box3d_path)
+    #bbox3d = np.loadtxt(box3d_path)
 
     local_feature_obj_detector = LocalFeatureObjectDetector(
         extractor_model,
         matching_2D_model,
-        sfm_ws_dir=paths["sfm_ws_dir"],
+        n_ref_view=2,
+        sfm_ws_dir=sfm_ws_dir,
         output_results=False,
         detect_save_dir=paths["vis_detector_dir"],
     )
@@ -203,35 +206,28 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
 
     pred_poses = {}  # {id:[pred_pose, inliers]}
 
+
+    """
+        the following code make use 
+        of the annotated box 
+        to detected the objects
+        -------
+    """
+
     for id, data in enumerate(tqdm(loader)):
         with torch.no_grad():
             img_path = data["path"][0]
             inp = data["image"].to(device)
-
+            
             # Detect object:
-            if id == 0:
-                # Detect object by 2D local feature matching for the first frame:
-                bbox, inp_crop, K_crop = local_feature_obj_detector.detect(
-                    inp, img_path, K
-                )
-            else:
-                # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
+            # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
+            if id > 0:
                 previous_frame_pose, inliers = pred_poses[id - 1]
-
-                if len(inliers) < 8:
-                    # Consider previous pose estimation failed, reuse local feature object detector:
-                    bbox, inp_crop, K_crop = local_feature_obj_detector.detect(
-                        inp, img_path, K
-                    )
-                else:
-                    (
-                        bbox,
-                        inp_crop,
-                        K_crop,
-                    ) = local_feature_obj_detector.previous_pose_detect(
-                        img_path, K, previous_frame_pose, bbox3d
-                    )
-
+            start = time.time()
+            bbox, inp_crop, K_crop = local_feature_obj_detector.detect(inp, img_path, K)
+            print(K_crop, inp_crop.shape)
+            logger.info(f"feature matching runtime: {(time.time() - start)%60} seconds" )
+    
             # Detect query image(cropped) keypoints and extract descriptors:
             pred_detection = extractor_model(inp_crop)
             pred_detection = {k: v[0].cpu().numpy() for k, v in pred_detection.items()}
@@ -325,6 +321,9 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
             draw_box=len(inliers) > 6,
             save_path=osp.join(paths["vis_box_dir"], f"{id}.jpg"),
         )
+        # import matplotlib.pyplot as plt 
+        # plt.imshow(inp_crop.squeeze().squeeze(), cmap="gray")
+        # plt.savefig("mygraph.png")
 
     # Output video to visualize estimated poses:
     vis_utils.make_video(paths["vis_box_dir"], paths["demo_video_path"])
@@ -337,9 +336,7 @@ def inference(cfg):
         data_dirs = [data_dirs]
         sfm_model_dirs = [sfm_model_dirs]
 
-    for data_dir, sfm_model_dir in tqdm(
-        zip(data_dirs, sfm_model_dirs), total=len(data_dirs)
-    ):
+    for data_dir, sfm_model_dir in tqdm(zip(data_dirs, sfm_model_dirs), total=len(data_dirs)):
         splits = data_dir.split(" ")
         data_root = splits[0]
         for seq_name in splits[1:]:

@@ -54,11 +54,11 @@ def import_data(img_lists, do_ba=False):
         img_index = int(img_name.split('.')[0])
         
         # read pose
-        pose_dir = path_utils.get_gt_pose_dir(base_dir)
+        pose_dir = path_utils.get_gt_pose_dir(base_dir, det_type="no_ba" )
         _, tvec, qvec = get_pose_from_txt(img_index, pose_dir)
 
         # read intrinsic
-        intrin_dir = path_utils.get_intrin_dir(base_dir)    
+        intrin_dir = path_utils.get_intrin_dir(base_dir, det_type="no_ba")    
         K = get_intrin_from_txt(img_index, intrin_dir)
         fx, fy, cx, cy = K[0][0], K[1][1], K[0, 2], K[1, 2]
 

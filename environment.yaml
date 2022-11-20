@@ -1,6 +1,6 @@
 # if you have a m1 chip run the following command :
-# ONDA_SUBDIR=osx-64 conda env create -f environment.yaml
-name: onepose
+# CONDA_SUBDIR=osx-64 conda env create -f environment.yaml
+name: onepose_virgin
 channels:
   - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch
   - pytorch

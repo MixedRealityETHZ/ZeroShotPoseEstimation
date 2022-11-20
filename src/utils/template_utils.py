@@ -9,11 +9,6 @@ from hydra.utils import get_original_cwd, to_absolute_path
 import wandb
 from pytorch_lightning.loggers.wandb import WandbLogger
 
-# from pytorch_lightning.loggers.neptune import NeptuneLogger
-# from pytorch_lightning.loggers.comet import CometLogger
-# from pytorch_lightning.loggers.mlflow import MLFlowLogger
-# from pytorch_lightning.loggers.tensorboard import TensorBoardLogger
-
 # rich imports
 from rich import print
 from rich.syntax import Syntax
