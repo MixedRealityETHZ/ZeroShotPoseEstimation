@@ -16,6 +16,7 @@ if you have a m1 chip run the following commands:
 CONDA_SUBDIR=osx-64 conda env create -f environment.yaml
 conda activate onepose
 ```
+Download DINO
 
 We use [SuperPoint](https://github.com/magicleap/SuperPointPretrainedNetwork) and [SuperGlue](https://github.com/magicleap/SuperPointPretrainedNetwork) 
 for 2D feature detection and matching in this project.
@@ -151,9 +152,8 @@ tensorboard xx
     1. In inference_demo change from features to detection to use DSM
 
 
-# Run DEMO in default onepose
+# Run DEMO in default onepose: OnePose Demo on Custom Data
 
-# OnePose Demo on Custom Data (WIP)
 In this tutorial we introduce the demo of OnePose running with data captured
 with our **OnePose Cap** application available for iOS device. 
 The app is still under preparing for release.
