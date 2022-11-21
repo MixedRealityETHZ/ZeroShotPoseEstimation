@@ -14,6 +14,7 @@ from src.utils import data_utils, path_utils, eval_utils, vis_utils
 from src.utils.bbox_3D_utils import compute_3dbbox_from_sfm
 from src.utils.model_io import load_network
 from src.local_feature_2D_detector import LocalFeatureObjectDetector
+from deep_spectral_method.detection_2D_utils import UnsupBbox
 from pytorch_lightning import seed_everything
 
 seed_everything(12345)
@@ -141,7 +142,7 @@ def pack_data(avg_descriptors3d, clt_descriptors, keypoints3d, detection, image_
     return inp_data
 
 
-def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="features"):
+def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="detection"):
     """Inference & visualize"""
     from src.datasets.normalized_dataset import NormalizedDataset
     from src.sfm.extract_features import confs
@@ -157,6 +158,12 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="feat
         track_interval = 5
     else:
         logger.info("Running OnePose inference without tracking")
+    
+    if object_det_type=="features":
+        pass
+    elif object_det_type=="detection":
+        feature_dir = data_root + "/DSM_features"
+        BboxPredictor = UnsupBbox(feature_dir=feature_dir)
 
     # Load models and prepare data:
     matching_model, extractor_model = load_model(cfg)
@@ -206,14 +213,6 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="feat
 
     pred_poses = {}  # {id:[pred_pose, inliers]}
 
-
-    """
-        the following code make use 
-        of the annotated box 
-        to detected the objects
-        -------
-    """
-
     for id, data in enumerate(tqdm(loader)):
         with torch.no_grad():
             img_path = data["path"][0]
@@ -221,11 +220,14 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="feat
             
             # Detect object:
             # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
-            if id > 0:
-                previous_frame_pose, inliers = pred_poses[id - 1]
             start = time.time()
-            bbox, inp_crop, K_crop = local_feature_obj_detector.detect(inp, img_path, K)
-            print(K_crop, inp_crop.shape)
+            if object_det_type=="features":
+                bbox, inp_crop, K_crop = local_feature_obj_detector.detect(inp, img_path, K)
+            elif object_det_type=="detection":
+                K_crop = K
+                inp_crop = BboxPredictor.infer_2d_bbox(query_img=inp, images_root=img_path, K=K)
+
+            #print(K_crop, inp_crop.shape)
             logger.info(f"feature matching runtime: {(time.time() - start)%60} seconds" )
     
             # Detect query image(cropped) keypoints and extract descriptors:
