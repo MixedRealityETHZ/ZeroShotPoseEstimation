@@ -181,7 +181,6 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
     sfm_ws_dir = paths["sfm_ws_dir"]
     bbox3d = compute_3dbbox_from_sfm(sfm_ws_dir=sfm_ws_dir, data_root=data_root)
     box3d_path = path_utils.get_3d_box_path(data_root)
-    # bbox3d = np.loadtxt(box3d_path)
 
     local_feature_obj_detector = LocalFeatureObjectDetector(
         extractor_model,

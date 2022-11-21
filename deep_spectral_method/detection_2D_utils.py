@@ -11,7 +11,7 @@ class UnsupBbox():
         self.full_seg_dir = full_seg_dir
         self.num_workers = 7 # decrease this if out_of_memory error
         self.model, self.val_transform, self.patch_size, self.num_heads = utils.get_model(self.model_name)
-
+        
 
     def infer_2d_bbox(self, image_path, K): 
         self.K = K   
