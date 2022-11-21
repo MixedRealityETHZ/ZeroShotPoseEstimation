@@ -16,6 +16,8 @@ dist/
 downloads/
 eggs/
 .eggs/
+.vscode/
+.hydra/
 lib/
 lib64/
 parts/
