@@ -17,11 +17,7 @@ from torchvision.utils import draw_bounding_boxes
 from tqdm import tqdm
 # CRF
 import denseCRF 
-
 from . import extract_utils as utils
-
-# import extract_utils as utils
-
 
 def extract_features(
     model_name: str,

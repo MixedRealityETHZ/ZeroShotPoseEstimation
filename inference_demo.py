@@ -7,6 +7,7 @@ import time
 import os.path as osp
 import numpy as np
 import natsort
+import torchvision
 
 from loguru import logger
 from torch.utils.data import DataLoader
@@ -26,7 +27,6 @@ if torch.cuda.is_available():
 else:
     device = "cpu"
     logger.info("Running OnePose with CPU")
-
 
 
 def get_default_paths(cfg, data_root, data_dir, sfm_model_dir):
@@ -158,10 +158,10 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
         track_interval = 5
     else:
         logger.info("Running OnePose inference without tracking")
-    
-    if object_det_type=="features":
+
+    if object_det_type == "features":
         pass
-    elif object_det_type=="detection":
+    elif object_det_type == "detection":
         feature_dir = data_root + "/DSM_features"
         BboxPredictor = UnsupBbox(feature_dir=feature_dir)
 
@@ -173,13 +173,15 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
     # sort images
     im_ids = [int(osp.basename(i).replace(".png", "")) for i in img_lists]
     im_ids.sort()
-    img_lists = [osp.join(osp.dirname(img_lists[0]), f"{im_id}.png") for im_id in im_ids]
+    img_lists = [
+        osp.join(osp.dirname(img_lists[0]), f"{im_id}.png") for im_id in im_ids
+    ]
 
     K, _ = data_utils.get_K(paths["intrin_full_path"])
-    sfm_ws_dir=paths["sfm_ws_dir"]
+    sfm_ws_dir = paths["sfm_ws_dir"]
     bbox3d = compute_3dbbox_from_sfm(sfm_ws_dir=sfm_ws_dir, data_root=data_root)
     box3d_path = path_utils.get_3d_box_path(data_root)
-    #bbox3d = np.loadtxt(box3d_path)
+    # bbox3d = np.loadtxt(box3d_path)
 
     local_feature_obj_detector = LocalFeatureObjectDetector(
         extractor_model,
@@ -217,19 +219,27 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
         with torch.no_grad():
             img_path = data["path"][0]
             inp = data["image"].to(device)
-            
+
             # Detect object:
             # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
             start = time.time()
-            if object_det_type=="features":
-                bbox, inp_crop, K_crop = local_feature_obj_detector.detect(inp, img_path, K)
-            elif object_det_type=="detection":
-                K_crop = K
-                inp_crop = BboxPredictor.infer_2d_bbox(query_img=inp, images_root=img_path, K=K)
+            if object_det_type == "features":
+                bbox, inp_crop, K_crop = local_feature_obj_detector.detect(
+                    inp, img_path, K
+                )
+            elif object_det_type == "detection":
+                bbox_orig_res = BboxPredictor.infer_2d_bbox(image_path=img_path, K=K)
+                inp_crop, K_crop = local_feature_obj_detector.crop_img_by_bbox(
+                    query_img_path=img_path,
+                    bbox=bbox_orig_res,
+                    K=K,
+                    crop_size=512,
+                )
+                inp_crop = torchvision.transforms.functional.to_tensor(inp_crop).unsqueeze(0)
 
-            #print(K_crop, inp_crop.shape)
-            logger.info(f"feature matching runtime: {(time.time() - start)%60} seconds" )
-    
+            # print(K_crop, inp_crop.shape)
+            logger.info(f"feature matching runtime: {(time.time() - start)%60} seconds")
+
             # Detect query image(cropped) keypoints and extract descriptors:
             pred_detection = extractor_model(inp_crop)
             pred_detection = {k: v[0].cpu().numpy() for k, v in pred_detection.items()}
@@ -323,7 +333,7 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
             draw_box=len(inliers) > 6,
             save_path=osp.join(paths["vis_box_dir"], f"{id}.jpg"),
         )
-        # import matplotlib.pyplot as plt 
+        # import matplotlib.pyplot as plt
         # plt.imshow(inp_crop.squeeze().squeeze(), cmap="gray")
         # plt.savefig("mygraph.png")
 
@@ -338,7 +348,9 @@ def inference(cfg):
         data_dirs = [data_dirs]
         sfm_model_dirs = [sfm_model_dirs]
 
-    for data_dir, sfm_model_dir in tqdm(zip(data_dirs, sfm_model_dirs), total=len(data_dirs)):
+    for data_dir, sfm_model_dir in tqdm(
+        zip(data_dirs, sfm_model_dirs), total=len(data_dirs)
+    ):
         splits = data_dir.split(" ")
         data_root = splits[0]
         for seq_name in splits[1:]:

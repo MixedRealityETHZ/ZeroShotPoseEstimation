@@ -167,6 +167,7 @@ class LocalFeatureObjectDetector():
         K_crop, K_crop_homo = get_K_crop_resize(bbox, K, [crop_size, crop_size])
         return image_crop, K_crop
 
+    
     def crop_img_by_bbox(self, query_img_path, bbox, K=None, crop_size=512):
         """
         Crop image by detect bbox

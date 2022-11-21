@@ -15,13 +15,13 @@ wandb==0.12.17
 rich==12.4.4
 transforms3d==0.3.1
 natsort==8.1.0
+pymatting==1.1.8
 # dependencies for DSM
 accelerate
 fire
 pillow
 scikit-image
 tqdm
-pymatting
 scikit-learn
 SimpleCRF
 

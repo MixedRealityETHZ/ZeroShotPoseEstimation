@@ -1,25 +1,30 @@
 from .extract import extract
-from extract import extract_utils as utils
-from src.local_feature_2D_detector import crop_img_by_bbox
+from .extract import extract_utils as utils
+import os
+
+# TODO: extend this class to load dino model on the constructor
 
 class UnsupBbox():
     def __init__(self, feature_dir, full_seg_dir=None) -> None:
         self.model_name = "dino_vits16"
         self.feature_dir = feature_dir
         self.full_seg_dir = full_seg_dir
+        self.num_workers = 7 # decrease this if out_of_memory error
         self.model, self.val_transform, self.patch_size, self.num_heads = utils.get_model(self.model_name)
 
 
-    def infer_2d_bbox(self, query_img, images_root, K): 
-        self.K = K            
+    def infer_2d_bbox(self, image_path, K): 
+        self.K = K   
+        file_name = os.path.basename(image_path)  
+        images_root = os.path.dirname(image_path)
         dataset = utils.ImagesDataset(
-            filenames=query_img, images_root=images_root, transform=self.val_transform
+            filenames=[file_name], images_root=images_root, transform=self.val_transform
         )
 
         feature_dict = extract.extract_features(
             output_dir=self.feature_dir,
             batch_size=1,
-            num_workers=0,
+            num_workers=self.num_workers,
             model_name=self.model_name,
             model=self.model,
             patch_size=self.patch_size,
@@ -37,11 +42,8 @@ class UnsupBbox():
         )
 
         # Bounding boxes
-        bbox = extract.extract_bboxes(feature_dict=feature_dict, segmap=segmap,)
+        bbox = extract.extract_bboxes(feature_dict=feature_dict, segmap=segmap)
         bbox_orig_res = bbox["bboxes_original_resolution"][0]
-
-        self.crop_size = int(max(bbox_orig_res[0]-bbox_orig_res[2], bbox_orig_res[1]-bbox_orig_res[3]))
-
-        return crop_img_by_bbox(query_img_path=images_root, bbox=bbox_orig_res, K=self.K, crop_size=self.crop_size)
+        return bbox_orig_res
 
 
