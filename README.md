@@ -1,18 +1,9 @@
-# OnePose: One-Shot Object Pose Estimation without CAD Models
-### [Project Page](https://zju3dv.github.io/onepose) | [Paper](https://arxiv.org/pdf/2205.12257.pdf)
-<br/>
+# ZeroShotPoseEstimation: OnePose and Deep Spectral Method
 
-> OnePose: One-Shot Object Pose Estimation without CAD Models  
-> [Jiaming Sun](https://jiamingsun.ml)<sup>\*</sup>, [Zihao Wang](http://zihaowang.xyz/)<sup>\*</sup>, [Siyu Zhang](https://derizsy.github.io/)<sup>\*</sup>, [Xingyi He](https://github.com/hxy-123/), [Hongcheng Zhao](https://github.com/HongchengZhao), [Guofeng Zhang](http://www.cad.zju.edu.cn/home/gfzhang/), [Xiaowei Zhou](https://xzhou.me)   
-> CVPR 2022  
+> ZeroShotPoseEstimation: OnePose and Deep Spectral Method 
+> [Roberto Pellerito](https://github.com/senecobis)<sup>\*</sup>, [Alessandro Burzio](https://github.com/Ale-Burzio)<sup>\*</sup>, [Lorenzo Piglia]()<sup>\*</sup>, [Diego Machain](), [Elisabetta Fedele]()
 
-![demo_vid](assets/onepose-github-teaser.gif)
-
-## TODO List
-- [x] Training and inference code.
-- [x] Pipeline to reproduce the evaluation results on the proposed OnePose dataset.
-- [ ] `OnePose Cap` app: we are preparing for the release of the data capture app to the App Store (iOS only), please stay tuned.
-- [ ] Demo pipeline for running OnePose with custom-captured data including the online tracking module.
+(to run DEMO with custom dataset see below)
 
 ## Installation
 
@@ -40,15 +31,12 @@ Please refer to the official [instructions](https://colmap.github.io/install.htm
 
 [Optional, WIP] You may optionally try out our web-based 3D visualization tool [Wis3D](https://github.com/zju3dv/Wis3D) for convenient and interactive visualizations of feature matches. We also provide many other cool visualization features in Wis3D, welcome to try it out.
 
-```bash
-# Working in progress, should be ready very soon, only available on test-pypi now.
-pip install -i https://test.pypi.org/simple/ wis3d
-```
 
 # Running on Euler
 
+```shell
 source $HOME/onepose/bin/activate
-
+```
 
 ## Training and Evaluation on OnePose dataset
 ### Dataset setup 
@@ -158,3 +146,61 @@ tensorboard xx
 
     Use for the box detection
     path_utils uses intrin_ba folder, which contains txt files with the bounding boxes, maaybeee
+
+# Select the kind of object recognition method DSM vs Feature matching
+    1. In inference_demo change from features to detection to use DSM
+
+
+# Run DEMO in default onepose
+
+# OnePose Demo on Custom Data (WIP)
+In this tutorial we introduce the demo of OnePose running with data captured
+with our **OnePose Cap** application available for iOS device. 
+The app is still under preparing for release.
+However, you can try it with the [sample data]() and skip the first step.  
+
+### Step 1: Capture the mapping sequence and the test sequence with OnePose Cap. 
+#### The app is under brewing🍺 coming soon.
+
+### Step 2: Organize the file structure of collected sequences
+1. Export the collected mapping sequence and the test sequence to the PC.
+2. Rename the **annotate** and **test** sequences directories to ``your_obj_name-annotate`` and `your_obj_name-test` respectively and organize the data as the follow structure:
+    ```
+    |--- /your/path/to/scanned_data
+    |       |--- your_obj_name
+    |       |       |---your_obj_name-annotate
+    |       |       |---your_obj_name-test
+    ```
+   Refer to the [sample data]() as an example.
+3. Link the collected data to the project directory
+    ```shell
+    REPO_ROOT=/path/to/OnePose
+    ln -s /path/to/scanned_data $REPO_ROOT/data/demo
+    ```
+   
+Now the data is prepared!
+
+### Step 3: Run OnePose with collected data
+Download the [pretrained OnePose model](https://drive.google.com/drive/folders/1VjLLjJ9oxjKV5Xy3Aty0uQUVwyEhgtIE?usp=sharing) and move it to `${REPO_ROOT}/data/model/checkpoints/onepose/GATsSPG.ckpt`.
+
+[Optional] To run OnePose with tracking modeule, pelase install [DeepLM](https://github.com/hjwdzh/DeepLM.git).
+Please make sure the sample program in `DeepLM` can be correctly executed to ensure successful installation.
+
+
+Execute the following commands, and a demo video naming `demo_video.mp4` will be saved in the folder of the test sequence.
+```shell
+REPO_ROOT=/path/to/OnePose
+OBJ_NAME=your_obj_name
+
+cd $REPO_ROOT
+conda activate OnePose
+
+bash scripts/demo_pipeline.sh $OBJ_NAME
+
+# [Optional] running OnePose with tracking
+export PYTHONPATH=$PYTHONPATH:/path/to/DeepLM/build
+export TORCH_USE_RTLD_GLOBAL=YES
+
+bash scripts/demo_pipeline.sh $OBJ_NAME --WITH_TRACKING 
+
+```
