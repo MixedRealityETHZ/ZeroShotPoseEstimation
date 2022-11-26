@@ -73,29 +73,28 @@ if dataset != "Aldoma":
     box_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/bounding_boxes", "*.txt"))
     poses_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/poses_ba", "*.txt"))
     intrinsics = f"{PATH}/intrinsics.txt"
+    bbs = read_list_box(box_list)
+    Ms_t = read_list_poses(poses_list)
+    visibility = np.ones((bbs.shape[0], 1))
+    with open(intrinsics) as f:
+        intr = f.readlines()
+        K = np.array(
+            [
+                [float(intr[0]), 0, float(intr[2])],
+                [0, float(intr[1]), float(intr[3])],
+                [0, 0, 1],
+            ]
+        )
 else:
-    PATH = f"data/{dataset}"
-    box_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/bounding_boxes.npy"))
-    poses_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/camera_poses.npy.npy"))
-    intrinsics = f"{PATH}/intrinsics.npy"
+    bbs = np.load('data/{:s}/bounding_boxes.npy'.format(dataset))  
+    K = np.load('data/{:s}/intrinsics.npy'.format(dataset))
+    Ms_t = np.load('data/{:s}/camera_poses.npy'.format(dataset)) 
+    visibility = np.load('data/{:s}/visibility.npy'.format(dataset)) 
 
-bbs = read_list_box(box_list)
-Ms_t = read_list_poses(poses_list)
-visibility = np.ones((bbs.shape[0], 1))
 
 if random_downsample:
     randomline = np.random.choice(bbs.shape[0], 10)
     visibility[randomline, :] = 1
-
-with open(intrinsics) as f:
-    intr = f.readlines()
-    K = np.array(
-        [
-            [float(intr[0]), 0, float(intr[2])],
-            [0, float(intr[1]), float(intr[3])],
-            [0, 0, 1],
-        ]
-    )
 
 
 # Compute the number of frames and the number of objects
@@ -103,7 +102,6 @@ with open(intrinsics) as f:
 
 n_frames = visibility.shape[0]
 n_objects = visibility.shape[1]
-
 
 ######################################
 # 2. Run the algorithm: estimate the #
