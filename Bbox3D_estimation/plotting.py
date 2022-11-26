@@ -184,7 +184,7 @@ def plot_camera(M, figure_axes):
     )
 
 
-def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images):
+def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, visibility):
     """Plot"""
     fig = plt.figure(figsize=(8, 8))  # Open a new figure.
     figure_axes = fig.add_subplot(111, projection="3d")
@@ -200,8 +200,9 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images):
             _ = plot_ellipsoid(estQs[ellipsoid_id, :, :], [0, 0, 1], figure_axes)
 
     # Plot the camera poses in black.
-    for pose_id in range(Ms_t.shape[0] // 4):
-        plot_camera(Ms_t[pose_id * 4 : pose_id * 4 + 4, :].transpose(), figure_axes)
+    for ind, pose_id in enumerate(range(Ms_t.shape[0] // 4)):
+        if visibility[ind]==1:
+            plot_camera(Ms_t[pose_id * 4 : pose_id * 4 + 4, :].transpose(), figure_axes)
 
     figure_axes.set_xlabel("X axis")
     figure_axes.set_ylabel("Y axis")
