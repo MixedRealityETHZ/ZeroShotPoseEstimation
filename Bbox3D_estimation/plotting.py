@@ -14,7 +14,11 @@ from matplotlib.patches import Ellipse
 import matplotlib.patches as mpatches
 import numpy as np
 
-from lfd import dual_ellipse_to_parameters, project_ellipsoids, dual_quadric_to_ellipsoid_parameters
+from lfd import (
+    dual_ellipse_to_parameters,
+    project_ellipsoids,
+    dual_quadric_to_ellipsoid_parameters,
+)
 
 
 def plot_ellipse(C, colour):
@@ -23,19 +27,28 @@ def plot_ellipse(C, colour):
     The input ellipse must be in dual form ([3x3] matrix).
     """
     # Only plot if the ellipse is valid: none of its element is NaN.
-    if not((np.isnan(C)).any()):
+    if not ((np.isnan(C)).any()):
         centre, axes, R = dual_ellipse_to_parameters(C)
         # Transform the rotation matrix into a rotation angle.
         # Remember: R = [cos(a), -sin(a); sin(a), cos(a)] -> a = atan2(R[1,0],R[0,0])
         angle_deg = np.rad2deg(math.atan2(R[1, 0], R[0, 0]))
         plot_axes = plt.gca()
-        e = Ellipse(xy=centre, width=axes[0]*2, height=axes[1]*2,
-                    angle=angle_deg, edgecolor=colour, linestyle='-',
-                    linewidth=2, fill=False)
+        e = Ellipse(
+            xy=centre,
+            width=axes[0] * 2,
+            height=axes[1] * 2,
+            angle=angle_deg,
+            edgecolor=colour,
+            linestyle="-",
+            linewidth=2,
+            fill=False,
+        )
         plot_axes.add_artist(e)
 
 
-def plot_est_and_gt_ellipses_on_images(K, Ms_t, estCs, gtQs, visibility, images, dataset, save_output_images):
+def plot_est_and_gt_ellipses_on_images(
+    K, Ms_t, estCs, gtQs, visibility, images, dataset, save_output_images
+):
     """Plot ellipses on images by projecting ellipsoids.
 
     Ground Truth ellipses are drawn in red, estimated ellipses are drawn in blue.
@@ -58,9 +71,13 @@ def plot_est_and_gt_ellipses_on_images(K, Ms_t, estCs, gtQs, visibility, images,
         for obj_id in range(n_objects):
             # Only plot the ellipses if there is a label for this object in this image.
             if visibility[frame_id, obj_id]:
-                estC = estCs[frame_id * 3:frame_id * 3 + 3, 3 * obj_id:3 * obj_id + 3]
+                estC = estCs[
+                    frame_id * 3 : frame_id * 3 + 3, 3 * obj_id : 3 * obj_id + 3
+                ]
                 if gtQs.shape[0] != 0:
-                    gtC = gt_ellipses[frame_id * 3:frame_id * 3 + 3, 3 * obj_id:3 * obj_id + 3]
+                    gtC = gt_ellipses[
+                        frame_id * 3 : frame_id * 3 + 3, 3 * obj_id : 3 * obj_id + 3
+                    ]
                 blue = (0, 0, 1)
                 red = (1, 0, 0)
                 # One more check: the object could be labelled in this image, but it might still not have a valid
@@ -69,13 +86,20 @@ def plot_est_and_gt_ellipses_on_images(K, Ms_t, estCs, gtQs, visibility, images,
                     if gtQs.shape[0] != 0:
                         plot_ellipse(gtC, red)
                     plot_ellipse(estC, blue)
-        plt.text(300, 50, 'Projection of GT   ellipsoids', {'color': 'r', 'fontsize': 12})
-        plt.text(300, 70, 'Projection of Est. ellipsoids', {'color': 'b', 'fontsize': 12})
+        plt.text(
+            300, 50, "Projection of GT   ellipsoids", {"color": "r", "fontsize": 12}
+        )
+        plt.text(
+            300, 70, "Projection of Est. ellipsoids", {"color": "b", "fontsize": 12}
+        )
         if save_output_images:
-            output_path = 'Output/{:s}/'.format(dataset)
+            output_path = "Output/{:s}/".format(dataset)
             # Create output directory, in case it does not exist already.
             Path(output_path).mkdir(parents=True, exist_ok=True)
-            plt.savefig('{:s}/projectedEllipsoids{:03d}.png'.format(output_path, frame_id), pad_inches=0.0)
+            plt.savefig(
+                "{:s}/projectedEllipsoids{:03d}.png".format(output_path, frame_id),
+                pad_inches=0.0,
+            )
 
 
 def compute_ellipsoid_points(centre, axes, R):
@@ -94,7 +118,9 @@ def compute_ellipsoid_points(centre, axes, R):
     z = axes[2] * np.outer(np.ones_like(u), np.cos(v))
 
     # Rotate the points according to R.
-    x, y, z = np.tensordot(R, np.vstack((x, y, z)).reshape((3, size_side, size_side)), axes=1)
+    x, y, z = np.tensordot(
+        R, np.vstack((x, y, z)).reshape((3, size_side, size_side)), axes=1
+    )
 
     # Apply the translation.
     x = x + centre[0]
@@ -109,22 +135,26 @@ def plot_ellipsoid(Q, colour, figure_axes):
     [centre, axes, R] = dual_quadric_to_ellipsoid_parameters(Q)
     if centre is not None:
         [x, y, z] = compute_ellipsoid_points(centre, axes, R)
-        figure_axes.plot_wireframe(x, y, z,  rstride=1, cstride=1,  color=colour, linewidth=0.5)
-        n_points = x.shape[0]*x.shape[1]
-        points = np.hstack((x.reshape(n_points, 1), y.reshape(n_points, 1), z.reshape(n_points, 1)))
+        figure_axes.plot_wireframe(
+            x, y, z, rstride=1, cstride=1, color=colour, linewidth=0.5
+        )
+        n_points = x.shape[0] * x.shape[1]
+        points = np.hstack(
+            (x.reshape(n_points, 1), y.reshape(n_points, 1), z.reshape(n_points, 1))
+        )
     return points
 
 
 def plot_camera(M, figure_axes):
     """Plot a pyramid to visualise the camera pose.
 
-       The base of the pyramid points in the positive Z axis direction.
+    The base of the pyramid points in the positive Z axis direction.
     """
     # Compute the points for the camera at the origin, aligned with the axes.
     base_width = 0.20  # Width (and height) of the pyramid base in meters
-    x = np.array([0, 0, 0, 0, 0,  1,  1, -1, -1,  1])*base_width/2
-    y = np.array([0, 0, 0, 0, 0,  1, -1, -1,  1,  1])*base_width/2
-    z = np.array([0, 0, 0, 0, 0,  2,  2,  2,  2,  2])*base_width/2
+    x = np.array([0, 0, 0, 0, 0, 1, 1, -1, -1, 1]) * base_width / 2
+    y = np.array([0, 0, 0, 0, 0, 1, -1, -1, 1, 1]) * base_width / 2
+    z = np.array([0, 0, 0, 0, 0, 2, 2, 2, 2, 2]) * base_width / 2
     points = np.vstack((x, y, z))
 
     # Place the camera in the desired pose, which is the inverse of the pose specified by M:
@@ -132,7 +162,9 @@ def plot_camera(M, figure_axes):
     # the pose of the world in the camera reference frame. We want the inverse of that: the pose of the camera
     # in the world reference frame.
     Mhom = np.vstack((M, (0, 0, 0, 1)))  # Cartesian to Homogeneous representation.
-    Minv = np.linalg.inv(Mhom)  # Inverse transformation matrix (still Homogeneous representation).
+    Minv = np.linalg.inv(
+        Mhom
+    )  # Inverse transformation matrix (still Homogeneous representation).
     Minv /= Minv[3, 3]
 
     # Apply the rotation.
@@ -147,13 +179,15 @@ def plot_camera(M, figure_axes):
     y = points[1, :].reshape(2, 5)
     z = points[2, :].reshape(2, 5)
 
-    figure_axes.plot_wireframe(x, y, z,  rstride=1, cstride=1,  color=[0, 0, 0], linewidth=0.5)
+    figure_axes.plot_wireframe(
+        x, y, z, rstride=1, cstride=1, color=[0, 0, 0], linewidth=0.5
+    )
 
 
 def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images):
-    """Plot """
+    """Plot"""
     fig = plt.figure(figsize=(8, 8))  # Open a new figure.
-    figure_axes = fig.add_subplot(111, projection='3d')
+    figure_axes = fig.add_subplot(111, projection="3d")
 
     # Plot the GT ellipsoids in red.
     for ellipsoid_id in range(gtQs.shape[0]):
@@ -166,15 +200,15 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images):
             _ = plot_ellipsoid(estQs[ellipsoid_id, :, :], [0, 0, 1], figure_axes)
 
     # Plot the camera poses in black.
-    for pose_id in range(Ms_t.shape[0]//4):
-        plot_camera(Ms_t[pose_id*4:pose_id*4+4, :].transpose(), figure_axes)
+    for pose_id in range(Ms_t.shape[0] // 4):
+        plot_camera(Ms_t[pose_id * 4 : pose_id * 4 + 4, :].transpose(), figure_axes)
 
-    figure_axes.set_xlabel('X axis')
-    figure_axes.set_ylabel('Y axis')
-    figure_axes.set_zlabel('Z axis')
+    figure_axes.set_xlabel("X axis")
+    figure_axes.set_ylabel("Y axis")
+    figure_axes.set_zlabel("Z axis")
 
-    red_patch = mpatches.Patch(color='red', label='GT')
-    blue_patch = mpatches.Patch(color='blue', label='Estimates')
+    red_patch = mpatches.Patch(color="red", label="GT")
+    blue_patch = mpatches.Patch(color="blue", label="Estimates")
     plt.legend(handles=[red_patch, blue_patch])
 
     # This forces axes to be equal, but also forces the scene to be a cube.
@@ -183,7 +217,7 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images):
     fig.show()
 
     if save_output_images:
-        output_path = 'Output/{:s}/'.format(dataset)
+        output_path = "Output/{:s}/".format(dataset)
         # Create output directory, in case it does not exist already.
         Path(output_path).mkdir(parents=True, exist_ok=True)
-        plt.savefig('{:s}/ellipsoids.png'.format(output_path), pad_inches=0.0)
+        plt.savefig("{:s}/ellipsoids.png".format(output_path), pad_inches=0.0)

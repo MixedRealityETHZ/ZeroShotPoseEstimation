@@ -58,7 +58,7 @@ def read_list_box(list):
 ###########################################
 # Select the dataset to be used.
 # The name of the dataset defines the names of input and output directories.
-dataset = "tiger"
+dataset = "Aldoma"
 
 # Select whether to save output images to files.
 save_output_images = True
@@ -68,12 +68,16 @@ random_downsample = False
 
 # Plot in 3D
 plot = False
-
-
-PATH = f"data/{dataset}"
-box_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/bounding_boxes", "*.txt"))
-poses_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/poses_ba", "*.txt"))
-intrinsics = f"{PATH}/intrinsics.txt"
+if dataset != "Aldoma":
+    PATH = f"data/{dataset}"
+    box_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/bounding_boxes", "*.txt"))
+    poses_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/poses_ba", "*.txt"))
+    intrinsics = f"{PATH}/intrinsics.txt"
+else:
+    PATH = f"data/{dataset}"
+    box_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/bounding_boxes.npy"))
+    poses_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/camera_poses.npy.npy"))
+    intrinsics = f"{PATH}/intrinsics.npy"
 
 bbs = read_list_box(box_list)
 Ms_t = read_list_poses(poses_list)
@@ -106,7 +110,7 @@ n_objects = visibility.shape[1]
 #    object ellipsoids.              #
 ######################################
 
-[inputCs, estCs, estQs] = compute_estimates(bbs, K, Ms_t, visibility)
+inputCs, estCs, estQs = compute_estimates(bbs, K, Ms_t, visibility)
 
 #############################
 # 3. I punti del 3D BB. #
@@ -127,5 +131,12 @@ points = np.dot(points, R.T)
 # Plot ellipsoids and camera poses in 3D.
 plot = True
 if plot:
-    plot_3D_scene(estQs, estQs, Ms_t, dataset, save_output_images)
+
+    plot_3D_scene(
+        estQs=estQs,
+        gtQs=estQs,
+        Ms_t=Ms_t,
+        dataset=dataset,
+        save_output_images=save_output_images,
+    )
     plt.show()

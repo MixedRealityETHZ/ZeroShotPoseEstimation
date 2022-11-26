@@ -8,16 +8,16 @@ import numpy as np
 def dual_quadric_to_ellipsoid_parameters(Q):
     """Computes centre, axes length and orientation of one ellipsoid.
 
-   A [4x4] matrix can represent general quadrics. In spite of preconditioning, the estimated quadrics can still,
-   in rare cases, represent something other than ellipsoids. This is corrected by forcing the lengths of the
-   axes to be positive.
+    A [4x4] matrix can represent general quadrics. In spite of preconditioning, the estimated quadrics can still,
+    in rare cases, represent something other than ellipsoids. This is corrected by forcing the lengths of the
+    axes to be positive.
 
-    :param Q: Ellipsoid/Quadric in dual form [4x4].
+     :param Q: Ellipsoid/Quadric in dual form [4x4].
 
-    :returns:
-      - centre - Ellipsoid centre in Cartesian coordinates [3x1].
-      - axes - Length of ellipsoid axes [3x1].
-      - R - Orientation of the ellipsoid [3x3].
+     :returns:
+       - centre - Ellipsoid centre in Cartesian coordinates [3x1].
+       - axes - Length of ellipsoid axes [3x1].
+       - R - Orientation of the ellipsoid [3x3].
     """
 
     # Scale the ellipsoid to put it in the usual form, with Q[3,3] = -1.
@@ -25,8 +25,14 @@ def dual_quadric_to_ellipsoid_parameters(Q):
 
     # Compute ellipsoid centred on origin.
     centre = -Q[:3, 3]
-    T = np.vstack((np.array((1, 0, 0, -centre[0])), np.array((0, 1, 0, -centre[1])),
-                   np.array((0, 0, 1, -centre[2])), np.array((0, 0, 0, 1))))
+    T = np.vstack(
+        (
+            np.array((1, 0, 0, -centre[0])),
+            np.array((0, 1, 0, -centre[1])),
+            np.array((0, 0, 1, -centre[2])),
+            np.array((0, 0, 0, 1)),
+        )
+    )
     Qcent = T.dot(Q).dot(T.transpose())
 
     # Compute axes and orientation.
@@ -43,7 +49,7 @@ def dual_quadric_to_ellipsoid_parameters(Q):
     a = np.sqrt(D[0])
     b = np.sqrt(D[1])
     c = np.sqrt(D[2])
-    
+
     axes = np.array([a, b, c])
     R = V
     return centre, axes, R
@@ -87,13 +93,31 @@ def fit_one_ellipse_in_bb(bb):
     """
 
     # Encode ellipse size (axes).
-    width = abs(bb[2]-bb[0])/2  # Width of the bounding box.
-    height = abs(bb[3]-bb[1])/2  # Height of the bounding box.
-    Ccn = np.vstack((np.hstack((np.diag((1/width**2, 1/height**2)), np.zeros((2, 1)))), np.array((0, 0, -1))))
+    width = abs(bb[2] - bb[0]) / 2  # Width of the bounding box.
+    height = abs(bb[3] - bb[1]) / 2  # Height of the bounding box.
+    Ccn = np.vstack(
+        (
+            np.hstack((np.diag((1 / width**2, 1 / height**2)), np.zeros((2, 1)))),
+            np.array((0, 0, -1)),
+        )
+    )
 
     # Encode ellipse location.
-    centre = np.array(((bb[0]+bb[2])/2, (bb[1]+bb[3])/2))  # Bounding box centre.
-    P = np.vstack((np.hstack((np.eye(2, 2), centre.reshape(2, 1))), np.array((0, 0, 1,))))
+    centre = np.array(
+        ((bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2)
+    )  # Bounding box centre.
+    P = np.vstack(
+        (
+            np.hstack((np.eye(2, 2), centre.reshape(2, 1))),
+            np.array(
+                (
+                    0,
+                    0,
+                    1,
+                )
+            ),
+        )
+    )
     Cinv = P.dot(np.linalg.inv(Ccn)).dot(P.transpose())
 
     # Force matrix to be symmetric: Cinv = (Cinv + Cinv') / 2
@@ -102,7 +126,7 @@ def fit_one_ellipse_in_bb(bb):
     # Scale ellipse so that element [2,2] is 1.
     C = Cinv / Cinv[2, 2]
 
-    C = C * np.sign(C[0, 0]+C[1, 1])
+    C = C * np.sign(C[0, 0] + C[1, 1])
     return C
 
 
@@ -122,12 +146,12 @@ def fit_ellipses_in_bbs(bbs, visibility):
     n_frames = visibility.shape[0]
     n_objects = visibility.shape[1]
 
-    Cs = np.zeros([n_frames*3, n_objects*3])
+    Cs = np.zeros([n_frames * 3, n_objects * 3])
     for frame in range(n_frames):
         for obj_id in range(n_objects):
             if visibility[frame, obj_id]:
-                C = fit_one_ellipse_in_bb(bbs[frame, obj_id*4:(obj_id+1)*4])
-                Cs[frame*3:(frame+1)*3, obj_id*3:(obj_id+1)*3] = C
+                C = fit_one_ellipse_in_bb(bbs[frame, obj_id * 4 : (obj_id + 1) * 4])
+                Cs[frame * 3 : (frame + 1) * 3, obj_id * 3 : (obj_id + 1) * 3] = C
     return Cs
 
 
@@ -190,38 +214,44 @@ def estimate_one_ellipsoid(Ps_t, Cs):
 
     :returns adj_Q: The estimated ellipse, in dual form [4x4].
     """
-    n_views = math.floor(Cs.shape[0]/3)  # Number of frames in which the current object was detected.
+    n_views = math.floor(
+        Cs.shape[0] / 3
+    )  # Number of frames in which the current object was detected.
 
-    M = np.zeros((6*n_views, 10+n_views))  # Matrix which represents the linear system to be solved.
-                                           # This has nothing to do with the movement matrix, the name has been
-                                           # kept like this for consistency with the name used in the paper.
+    M = np.zeros(
+        (6 * n_views, 10 + n_views)
+    )  # Matrix which represents the linear system to be solved.
+    # This has nothing to do with the movement matrix, the name has been
+    # kept like this for consistency with the name used in the paper.
 
     # Compute the B matrices and stack them into M.
     for index in range(n_views):
         # Get centre and axes of current ellipse.
-        [centre, axes, _] = dual_ellipse_to_parameters(Cs[3 * index:3 * index + 3, :])
+        [centre, axes, _] = dual_ellipse_to_parameters(Cs[3 * index : 3 * index + 3, :])
 
         # Compute T, a transformation used to precondition the ellipse: centre the ellipse and scale the axes.
         div_f = np.linalg.norm(axes)  # Distance of point (A,B) from origin.
-        T   = np.linalg.inv((np.vstack((np.hstack((np.eye(2)*div_f, centre)), np.array([0, 0, 1])))))
+        T = np.linalg.inv(
+            (np.vstack((np.hstack((np.eye(2) * div_f, centre)), np.array([0, 0, 1]))))
+        )
         T_t = T.transpose()
 
         # Compute P_fr, applying T to the projection matrix.
-        P_fr = np.dot(Ps_t[4*index:4*index+4, :], T_t)
+        P_fr = np.dot(Ps_t[4 * index : 4 * index + 4, :], T_t)
 
         # Compute the coefficients for the linear system based on the current P_fr.
         B = compute_B(P_fr)
 
         # Apply T to the ellipse.
-        C_t = np.dot(np.dot(T, Cs[3*index:3*index+3, :]), T_t)
+        C_t = np.dot(np.dot(T, Cs[3 * index : 3 * index + 3, :]), T_t)
 
         # Transform the ellipse to vector form.
         C_tv = symmetric_mat_3_to_vector(C_t)
         C_tv /= -C_tv[5]
 
         # Write the obtained coefficients to the correct slice of M.
-        M[6*index:6*index+6, 0:10] = B
-        M[6*index:6*index+6, 10+index] = -C_tv
+        M[6 * index : 6 * index + 6, 0:10] = B
+        M[6 * index : 6 * index + 6, 10 + index] = -C_tv
 
     _, _, V = np.linalg.svd(M)
     w = V[-1, :]  # V is transposed respect to Matlab, so we take the last row.
@@ -237,82 +267,94 @@ def estimate_one_ellipsoid(Ps_t, Cs):
 def compute_B(P_fr):
     """Rearranges the parameters so that it is possible to estimate the ellipsoid by solving a linear system.
 
-       Please refer to the paper for details.
+    Please refer to the paper for details.
     """
     B = np.zeros((6, 10))
 
     # Vectorise P, one row after the other (C order = row-major).
-    vec_p = np.reshape(P_fr, (12, 1), order='C')
+    vec_p = np.reshape(P_fr, (12, 1), order="C")
 
     r = vec_p[0:9]
     t = vec_p[9:12]
 
     # Fill B.
-    B[0, :] = (r[0] ** 2,
-               2 * r[0] * r[3],
-               2 * r[0] * r[6],
-               2 * r[0] * t[0],
-               r[3] ** 2,
-               2 * r[3] * r[6],
-               2 * r[3] * t[0],
-               r[6] ** 2,
-               2 * r[6] * t[0],
-               t[0] ** 2)
+    B[0, :] = (
+        r[0] ** 2,
+        2 * r[0] * r[3],
+        2 * r[0] * r[6],
+        2 * r[0] * t[0],
+        r[3] ** 2,
+        2 * r[3] * r[6],
+        2 * r[3] * t[0],
+        r[6] ** 2,
+        2 * r[6] * t[0],
+        t[0] ** 2,
+    )
 
-    B[1, :] = (r[1] * r[0],
-               r[1] * r[3] + r[4] * r[0],
-               r[1] * r[6] + r[7] * r[0],
-               t[1] * r[0] + r[1] * t[0],
-               r[4] * r[3],
-               r[4] * r[6] + r[7] * r[3],
-               r[4] * t[0] + t[1] * r[3],
-               r[7] * r[6],
-               t[1] * r[6] + r[7] * t[0],
-               t[1] * t[0])
+    B[1, :] = (
+        r[1] * r[0],
+        r[1] * r[3] + r[4] * r[0],
+        r[1] * r[6] + r[7] * r[0],
+        t[1] * r[0] + r[1] * t[0],
+        r[4] * r[3],
+        r[4] * r[6] + r[7] * r[3],
+        r[4] * t[0] + t[1] * r[3],
+        r[7] * r[6],
+        t[1] * r[6] + r[7] * t[0],
+        t[1] * t[0],
+    )
 
-    B[2, :] = (r[2] * r[0],
-               r[2] * r[3] + r[5] * r[0],
-               r[2] * r[6] + r[8] * r[0],
-               t[2] * r[0] + r[2] * t[0],
-               r[5] * r[3],
-               r[5] * r[6] + r[8] * r[3],
-               r[5] * t[0] + t[2] * r[3],
-               r[8] * r[6],
-               t[2] * r[6] + r[8] * t[0],
-               t[2] * t[0])
+    B[2, :] = (
+        r[2] * r[0],
+        r[2] * r[3] + r[5] * r[0],
+        r[2] * r[6] + r[8] * r[0],
+        t[2] * r[0] + r[2] * t[0],
+        r[5] * r[3],
+        r[5] * r[6] + r[8] * r[3],
+        r[5] * t[0] + t[2] * r[3],
+        r[8] * r[6],
+        t[2] * r[6] + r[8] * t[0],
+        t[2] * t[0],
+    )
 
-    B[3, :] = (r[1] ** 2,
-               2 * r[1] * r[4],
-               2 * r[1] * r[7],
-               2 * r[1] * t[1],
-               r[4] ** 2,
-               2 * r[4] * r[7],
-               2 * r[4] * t[1],
-               r[7] ** 2,
-               2 * r[7] * t[1],
-               t[1] ** 2)
+    B[3, :] = (
+        r[1] ** 2,
+        2 * r[1] * r[4],
+        2 * r[1] * r[7],
+        2 * r[1] * t[1],
+        r[4] ** 2,
+        2 * r[4] * r[7],
+        2 * r[4] * t[1],
+        r[7] ** 2,
+        2 * r[7] * t[1],
+        t[1] ** 2,
+    )
 
-    B[4, :] = (r[2] * r[1],
-               r[2] * r[4] + r[5] * r[1],
-               r[2] * r[7] + r[8] * r[1],
-               t[2] * r[1] + r[2] * t[1],
-               r[5] * r[4],
-               r[5] * r[7] + r[8] * r[4],
-               r[5] * t[1] + t[2] * r[4],
-               r[8] * r[7],
-               t[2] * r[7] + r[8] * t[1],
-               t[2] * t[1])
+    B[4, :] = (
+        r[2] * r[1],
+        r[2] * r[4] + r[5] * r[1],
+        r[2] * r[7] + r[8] * r[1],
+        t[2] * r[1] + r[2] * t[1],
+        r[5] * r[4],
+        r[5] * r[7] + r[8] * r[4],
+        r[5] * t[1] + t[2] * r[4],
+        r[8] * r[7],
+        t[2] * r[7] + r[8] * t[1],
+        t[2] * t[1],
+    )
 
-    B[5, :] = (r[2] ** 2,
-               2 * r[2] * r[5],
-               2 * r[2] * r[8],
-               2 * r[2] * t[2],
-               r[5] ** 2,
-               2 * r[5] * r[8],
-               2 * r[5] * t[2],
-               r[8] ** 2,
-               2 * r[8] * t[2],
-               t[2] ** 2)
+    B[5, :] = (
+        r[2] ** 2,
+        2 * r[2] * r[5],
+        2 * r[2] * r[8],
+        2 * r[2] * t[2],
+        r[5] ** 2,
+        2 * r[5] * r[8],
+        2 * r[5] * t[2],
+        r[8] ** 2,
+        2 * r[8] * t[2],
+        t[2] ** 2,
+    )
 
     return B
 
@@ -346,14 +388,16 @@ def estimate_ellipsoids(Ps_t, input_ellipsoids_centres, inputCs, visibility):
             row_selector = np.kron(visibility[:, obj], np.ones(3).reshape(1, 3))
             row_selector = np.array(row_selector, dtype=bool)[0]
             # Apply the mask.
-            selectedCs = inputCs[row_selector, obj*3:obj*3+3]
+            selectedCs = inputCs[row_selector, obj * 3 : obj * 3 + 3]
 
             # Select the corresponding projection matrices.
             # Create the mask.
             row_selector = np.kron(visibility[:, obj], np.ones(4).reshape(1, 4))
             row_selector = np.array(row_selector, dtype=bool)[0]
             # Apply the mask.
-            selectedPs_t = Ps_t[row_selector, :]  # Selected Projection matrices, transposed.
+            selectedPs_t = Ps_t[
+                row_selector, :
+            ]  # Selected Projection matrices, transposed.
 
             # Compute the translation matrix due to the centre of the current ellipsoid.
             translM = np.eye(4)
@@ -361,10 +405,19 @@ def estimate_ellipsoids(Ps_t, input_ellipsoids_centres, inputCs, visibility):
 
             # Loop over the frames in which the current object is present,
             # apply the translation matrix to each projection matrix, for numerical preconditioning.
-            for instance_id in range(math.floor(selectedPs_t.shape[0]/4)):
+            for instance_id in range(math.floor(selectedPs_t.shape[0] / 4)):
                 first = np.hstack((np.eye(3), np.zeros((3, 1))))
-                second = np.vstack((selectedPs_t[instance_id*4:instance_id*4+4, :].transpose(), np.array((0, 0, 0, 1))))
-                selectedPs_t[instance_id*4:instance_id*4+4, :] = np.dot(np.dot(first, second), translM).transpose()
+                second = np.vstack(
+                    (
+                        selectedPs_t[
+                            instance_id * 4 : instance_id * 4 + 4, :
+                        ].transpose(),
+                        np.array((0, 0, 0, 1)),
+                    )
+                )
+                selectedPs_t[instance_id * 4 : instance_id * 4 + 4, :] = np.dot(
+                    np.dot(first, second), translM
+                ).transpose()
 
             # Estimate the parameters of the current ellipsoid.
             estQ = estimate_one_ellipsoid(selectedPs_t, selectedCs)
@@ -401,20 +454,20 @@ def project_ellipsoids(Ps_t, estQs, visibility):
     n_frames = visibility.shape[0]
     n_objects = visibility.shape[1]
 
-    Cs = np.zeros([n_frames*3, n_objects*3])
+    Cs = np.zeros([n_frames * 3, n_objects * 3])
     for frame in range(n_frames):
         for obj in range(n_objects):
             # If the estimate is valid (not NaN) and the object is visible in this frame:
-            if not((np.isnan(estQs[obj, :, :])).any()) and visibility[frame, obj]:
+            if not ((np.isnan(estQs[obj, :, :])).any()) and visibility[frame, obj]:
                 # Transform the ellipsoid to the camera reference frame and project them.
-                P = Ps_t[frame*4:frame*4+4, :].transpose()
+                P = Ps_t[frame * 4 : frame * 4 + 4, :].transpose()
                 Ctemp = np.dot(np.dot(P, estQs[obj, :, :]), P.transpose())
                 # Scale the ellipse to put it in standard form, with element [2,2] set to 1.
                 Ctemp /= Ctemp[2, 2]
                 # Write the result in the output structure.
-                Cs[frame*3:frame*3+3, obj*3:obj*3+3] = Ctemp
+                Cs[frame * 3 : frame * 3 + 3, obj * 3 : obj * 3 + 3] = Ctemp
             else:  # Propagate the NaN's of the ellipsoid to the ellipse.
-                Cs[frame*3:frame*3+3, obj*3:obj*3+3] = np.nan
+                Cs[frame * 3 : frame * 3 + 3, obj * 3 : obj * 3 + 3] = np.nan
     return Cs
 
 
@@ -447,18 +500,26 @@ def compute_estimates(bbs, K, Ms_t, visibility):
     inputCs = fit_ellipses_in_bbs(bbs, visibility)
 
     # Set the initial ellipsoids centres to the origin.
-    input_ellipsoids_centres = np.dot(np.array(([0], [0], [0], [1])), (np.ones((1, n_objects))))
+    input_ellipsoids_centres = np.dot(
+        np.array(([0], [0], [0], [1])), (np.ones((1, n_objects)))
+    )
 
     # Perform the first round of estimation.
-    estQs_first_step = estimate_ellipsoids(Ps_t, input_ellipsoids_centres, inputCs, visibility)
+    estQs_first_step = estimate_ellipsoids(
+        Ps_t, input_ellipsoids_centres, inputCs, visibility
+    )
 
     # Extract the centres of the current estimates for the ellipsoids.
     first_step_ellipsoids_centres = input_ellipsoids_centres
     for object_id in range(n_objects):
-        first_step_ellipsoids_centres[0:3, object_id] = estQs_first_step[object_id, 0:3, 3]
+        first_step_ellipsoids_centres[0:3, object_id] = estQs_first_step[
+            object_id, 0:3, 3
+        ]
 
     # Perform the second round of estimation, exploiting the centres estimated at the previous step.
-    estQs_second_step = estimate_ellipsoids(Ps_t, first_step_ellipsoids_centres, inputCs, visibility)
+    estQs_second_step = estimate_ellipsoids(
+        Ps_t, first_step_ellipsoids_centres, inputCs, visibility
+    )
 
     # Project the estimated ellipsoids onto the images.
     estCs = project_ellipsoids(Ps_t, estQs_second_step, visibility)
