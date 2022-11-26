@@ -66,8 +66,6 @@ save_output_images = True
 # Randomly use less images (messo se ci sono video troppo lunghi)
 random_downsample = False
 
-# Plot in 3D
-plot = False
 if dataset != "Aldoma":
     PATH = f"data/{dataset}"
     box_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/bounding_boxes", "*.txt"))
