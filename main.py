@@ -30,7 +30,7 @@ from plotting import plot_est_and_gt_ellipses_on_images, plot_3D_scene
 # or that the detector failed. For these cases the algorithm does not visualise the estimated, nor the GT ellipses.
 #
 # If one object is not detected in at least 3 frames, it is ignored. The values of the corresponding ellipsoid and
-# ellipses are set to NaN, so the object is never visualised.
+# ellipses are set to Nax.set_xlabel('X Label')
 
 # Utilities
 def read_list_poses(list):
@@ -67,7 +67,7 @@ save_output_images = True
 random_downsample = False
 
 # Plot in 3D
-plot = False
+plot = True
 
 if dataset != "Aldoma":
 
@@ -127,8 +127,8 @@ n_objects = visibility.shape[1]
 centre, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[0])
 
 # Possible coordinates
-mins = [c-ax/2 for (ax, c) in zip(axes, centre)]
-maxs = [c+ax/2 for (ax, c) in zip(axes, centre)]
+mins = [-ax for (ax) in axes]
+maxs = [ax for (ax) in axes]
 
 # Coordinates of the points mins and maxs
 points = np.array(list(itertools.product(*zip(mins, maxs))))
@@ -136,11 +136,11 @@ points = np.array(list(itertools.product(*zip(mins, maxs))))
 # Points in the camera frame
 points = np.dot(points, R.T)
 
+# Shift correctly the parralelepiped
+points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
 
 
-
-# Plot ellipsoids and camera poses in 3D.
-
+# Plot ellipsoids, parralepiped and camera poses in 3D.
 if plot:
-    plot_3D_scene(estQs, estQs, Ms_t, dataset, save_output_images)
+    fig = plot_3D_scene(estQs, estQs, Ms_t, dataset, save_output_images, points)
     plt.show()
