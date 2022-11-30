@@ -185,8 +185,8 @@ def plot_camera(M, figure_axes):
     )
 
 
-def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, visibility):
-    """Plot"""
+def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, points, visibility=None):
+    """Plot """
     fig = plt.figure(figsize=(8, 8))  # Open a new figure.
     figure_axes = fig.add_subplot(111, projection="3d")
 
@@ -202,7 +202,7 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, visibility):
 
     # Plot the camera poses in black.
     for ind, pose_id in enumerate(range(Ms_t.shape[0] // 4)):
-        if visibility[ind]==1:
+        if visibility is None or visibility[ind]==1:
             plot_camera(Ms_t[pose_id * 4 : pose_id * 4 + 4, :].transpose(), figure_axes)
 
     figure_axes.set_xlabel("X axis")
@@ -238,4 +238,5 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, visibility):
         output_path = "Output/{:s}/".format(dataset)
         # Create output directory, in case it does not exist already.
         Path(output_path).mkdir(parents=True, exist_ok=True)
-        plt.savefig("{:s}/ellipsoids.png".format(output_path), pad_inches=0.0)
+        plt.savefig('{:s}/ellipsoids.png'.format(output_path), pad_inches=0.0)
+    return fig
