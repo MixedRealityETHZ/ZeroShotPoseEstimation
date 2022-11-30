@@ -2,7 +2,13 @@ import numpy as np
 import glob
 import os
 import math
+from pathlib import Path
+import collections
 
+def sort_path_list(path_list):
+    files = {int(Path(file).stem) : file for file in path_list}
+    ordered_dict = collections.OrderedDict(sorted(files.items()))
+    return list(ordered_dict.values())
 
 def read_list_poses(list):
     poses = []

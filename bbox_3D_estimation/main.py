@@ -1,34 +1,8 @@
-"""main - Localisation from Detections - Main.
-
-###################
-0. Introduction. #
-###################
-Conventions: variable names such as Ms_t indicate that there are multiple M matrices (Ms)
-which are transposed (_t) respect to the canonical orientation of such data.
-Prefixes specify if one variable refers to input data, estimates etc.: inputCs, estCs, etc.
-
-Variable names:
-C - Ellipse in dual form [3x3].
-Q - Quadric/Ellipsoid in dual form [4x4], in the World reference frame.
-K - Camera intrinsics [3x3].
-M - Pose matrix: transforms points from the World reference frame to the Camera reference frame [3x4].
-P - Projection matrix = K * M [3*4].
-
-A note on the visibility information: when false, it might mean that either the object is not visible in the image,
-or that the detector failed. For these cases the algorithm does not visualise the estimated, nor the GT ellipses.
-
-If one object is not detected in at least 3 frames, it is ignored. The values of the corresponding ellipsoid and
-ellipses are set to NaN, so the object is never visualised.
-"""
-
-import os
-import glob
-import pickle
-import itertools
 import numpy as np
 from matplotlib import pyplot as plt
-from plotting import plot_est_and_gt_ellipses_on_images, plot_3D_scene
-from lfd import compute_estimates, dual_quadric_to_ellipsoid_parameters
+import itertools 
+from utils import get_data, compute_estimates, dual_quadric_to_ellipsoid_parameters
+from plotting import plot_3D_scene
 
 
 # Utilities
@@ -113,30 +87,36 @@ if random_downsample:
 n_frames = visibility.shape[0]
 n_objects = visibility.shape[1]
 
-######################################
-# 2. Run the algorithm: estimate the #
-#    object ellipsoids.              #
-######################################
+    ######################################
+    # 2. Run the algorithm: estimate the #
+    #    object ellipsoids for all the   #
+    #    objects in the scene.           #
+    ######################################
 
-inputCs, estCs, estQs = compute_estimates(bbs, K, Ms_t, visibility)
+    estQs = compute_estimates(bbs, K, Ms_t, visibility)
 
-#############################
-# 3. I punti del 3D BB. #
-#############################
-centre, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[0])
+    ##################################
+    # 3. Get the points of the bbox  #
+    # of the object with object_idx  #
+    ##################################
+    object_idx = 0
+    while(object_idx >= estQs.shape[0] or object_idx < 0):
+        print("Insert a valid object idx, possible values are: " + str(np.arange(0, estQs.shape[0])))
+        object_idx = int(input("Enter your value: "))
+    centre, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[object_idx])
 
-# Possible coordinates
-mins = [-ax for (ax) in axes]
-maxs = [ax for (ax) in axes]
+    # Possible coordinates
+    mins = [-ax for (ax) in axes]
+    maxs = [ax for (ax) in axes]
 
-# Coordinates of the points mins and maxs
-points = np.array(list(itertools.product(*zip(mins, maxs))))
+    # Coordinates of the points mins and maxs
+    points = np.array(list(itertools.product(*zip(mins, maxs))))
 
-# Points in the camera frame
-points = np.dot(points, R.T)
+    # Points in the camera frame
+    points = np.dot(points, R.T)
 
-# Shift correctly the parralelepiped
-points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
+    # Shift correctly the parralelepiped
+    points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
 
 #print(points)
 
