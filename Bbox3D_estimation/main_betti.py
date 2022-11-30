@@ -1,12 +1,12 @@
 import numpy as np
 from matplotlib import pyplot as plt
 import itertools 
-from utils_betti import *
+from utils import *
 from plotting import plot_3D_scene
 
 if __name__ == '__main__':
     # The name of the dataset defines the names of input and output directories.
-    dataset = 'Tiger2'
+    dataset = "tiger" #'Tiger2'
      # Select whether to save output images to files.
     save_output_images = True
      # Randomly use less images (messo se ci sono video troppo lunghi)

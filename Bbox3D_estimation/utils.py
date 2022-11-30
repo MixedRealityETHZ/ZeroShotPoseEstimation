@@ -30,7 +30,7 @@ def get_data(dataset, random_downsample):
     K= [] 
     Ms_t= [] 
     visibility= []
-    PATH = f"Data/{dataset}"
+    PATH = f"data/{dataset}"
     box_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/bounding_boxes", "*.txt"))
     poses_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/poses_ba", "*.txt"))
     intrinsics = f"{PATH}/intrinsics.txt"
