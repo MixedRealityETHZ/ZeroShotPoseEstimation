@@ -19,7 +19,7 @@ from src.utils.model_io import load_network
 from src.local_feature_2D_detector import LocalFeatureObjectDetector
 from deep_spectral_method.detection_2D_utils import UnsupBbox
 from bbox_3D_estimation.detection_3D_utils import Detector3D
-from bbox_3D_estimation.utils import read_list_poses
+from bbox_3D_estimation.utils import read_list_poses, sort_path_list
 from pytorch_lightning import seed_everything
 
 seed_everything(12345)
@@ -184,10 +184,18 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
     if box_3D_detect_type=="sfm_based":
         bbox3d = compute_3dbbox_from_sfm(sfm_ws_dir=sfm_ws_dir, data_root=data_root)
     else:
+        from bbox_3D_extraction import predict_3D_bboxes
         logger.info(f"3d bbox estimated with {box_3D_detect_type} method, reading from file")
+        segment_dir = data_root + "/test_moccona-annotate"
+        intriscs_path = segment_dir + "/intrinsics.txt"
+        K, _ = data_utils.get_K(intriscs_path)
+        poses_list_anno = glob.glob(os.path.join(os.getcwd(), f"{segment_dir}/poses", "*.txt"))
+        poses_list_anno = sort_path_list(poses_list_anno)
+        img_lists_anno = glob.glob(os.path.join(os.getcwd(), f"{segment_dir}/color_full", "*.png"))
+        img_lists_anno = sort_path_list(img_lists_anno)
+        predict_3D_bboxes(BboxPredictor, img_lists_anno, poses_list_anno, K)
 
     box3d_path = path_utils.get_3d_box_path(data_root)
-
 
     local_feature_obj_detector = LocalFeatureObjectDetector(
         extractor_model,
