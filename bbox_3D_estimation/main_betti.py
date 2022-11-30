@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 import itertools 
-from utils import *
+from utils import get_data, compute_estimates, dual_quadric_to_ellipsoid_parameters
 from plotting import plot_3D_scene
 
 if __name__ == '__main__':
@@ -16,8 +16,8 @@ if __name__ == '__main__':
 
     bbs, K, Ms_t, visibility = get_data(dataset, random_downsample)
     # Compute the number of frames and the number of objects for the current dataset from the size of the visibility matrix.
-    n_frames = visibility.shape[0]
-    n_objects = visibility.shape[1]
+    #n_frames = visibility.shape[0]
+    #n_objects = visibility.shape[1]
 
     ######################################
     # 2. Run the algorithm: estimate the #

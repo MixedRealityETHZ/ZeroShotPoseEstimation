@@ -29,8 +29,6 @@ def extract_features(
     dataset: dict,
     which_block: int = -1,
     num_workers: int = 0,
-    
-
 ):
 
     """
@@ -45,89 +43,49 @@ def extract_features(
             --batch_size 1
     """
 
-    # Output
-    #utils.make_output_dir(output_dir)
-    
-
+    device = "cpu"
     # Add hook
-    if "dino" in model_name or "mocov3" in model_name:
-        feat_out = {}
+    feat_out = {}
 
-        def hook_fn_forward_qkv(module, input, output):
-            feat_out["qkv"] = output
+    def hook_fn_forward_qkv(module, input, output):
+        feat_out["qkv"] = output
 
-        model._modules["blocks"][which_block]._modules["attn"]._modules[
-            "qkv"
-        ].register_forward_hook(hook_fn_forward_qkv)
-    else:
-        raise ValueError(model_name)
-
-    # Dataset
-    #filenames = Path(images_list).read_text().splitlines()
-    #Load the images
-    
-    dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, num_workers=num_workers
-    )
-
-
-    # Prepare
-    # accelerator = Accelerator(mixed_precision=True, cpu=False)
-    #accelerator = Accelerator(mixed_precision=False, cpu=True)
-    accelerator = Accelerator(mixed_precision='no', cpu=True)
-    # model, dataloader = accelerator.prepare(model, dataloader)
-    model = model.to(accelerator.device)
+    model._modules["blocks"][which_block]._modules["attn"]._modules["qkv"].register_forward_hook(hook_fn_forward_qkv)
+    model.to(device)
 
     # Process
-    for i, (images, files, indices) in enumerate(dataloader):
-        
-        output_dict = {}
+    images, files, indices = dataset[0]
+    output_dict = {}
 
-        # Check if file already exists
-        id = Path(files[0]).stem
+    # Check if file already exists
+    id = Path(files[0]).stem
 
-        # Reshape image
-        P = patch_size
-        B, C, H, W = images.shape
-        H_patch, W_patch = H // P, W // P
-        H_pad, W_pad = H_patch * P, W_patch * P
-        T = H_patch * W_patch + 1  # number of tokens, add 1 for [CLS]
-        # images = F.interpolate(images, size=(H_pad, W_pad), mode='bilinear')  # resize image
-        images = images[:, :, :H_pad, :W_pad]
-        images = images.to(accelerator.device)
+    # Reshape image
+    images = images.unsqueeze(0)
+    P = patch_size
+    B, C, H, W = images.shape
+    H_patch, W_patch = H // P, W // P
+    H_pad, W_pad = H_patch * P, W_patch * P
+    T = H_patch * W_patch + 1  # number of tokens, add 1 for [CLS]
+    # images = F.interpolate(images, size=(H_pad, W_pad), mode='bilinear')  # resize image
+    images = images[:, :, :H_pad, :W_pad].to(device)
 
-        # Forward and collect features into output dict
-        if "dino" in model_name or "mocov3" in model_name:
-            # accelerator.unwrap_model(model).get_intermediate_layers(images)[0].squeeze(0)
-            model.get_intermediate_layers(images)[0].squeeze(0)
-            # output_dict['out'] = out
-            output_qkv = (
-                feat_out["qkv"]
-                .reshape(B, T, 3, num_heads, -1 // num_heads)
-                .permute(2, 0, 3, 1, 4)
-            )
-            # output_dict['q'] = output_qkv[0].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
-            output_dict["k"] = output_qkv[1].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
-            # output_dict['v'] = output_qkv[2].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
-        else:
-            raise ValueError(model_name)
+    # Forward and collect features into output dict
+    model.get_intermediate_layers(images)[0].squeeze(0)
 
-        # Metadata
-        output_dict["indices"] = indices[0]
-        output_dict["file"] = files[0]
-        output_dict["id"] = id
-        output_dict["model_name"] = model_name
-        output_dict["patch_size"] = patch_size
-        output_dict["shape"] = (B, C, H, W)
-        output_dict = {
-            k: (v.detach().cpu() if torch.is_tensor(v) else v)
-            for k, v in output_dict.items()
-        }
+    output_qkv = feat_out["qkv"].reshape(B, T, 3, num_heads, -1 // num_heads).permute(2, 0, 3, 1, 4)
+    output_dict['q'] = output_qkv[0].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
+    output_dict["k"] = output_qkv[1].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
+    output_dict['v'] = output_qkv[2].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
 
-        #We need to use output_dict to use it in the next stage
-        # Save
-        #accelerator.save(output_dict, str(output_file))
-        #accelerator.wait_for_everyone()
+    # Metadata
+    output_dict["indices"] = indices[0]
+    output_dict["file"] = files[0]
+    output_dict["id"] = id
+    output_dict["model_name"] = model_name
+    output_dict["patch_size"] = patch_size
+    output_dict["shape"] = (B, C, H, W)
+    output_dict = {k: (v.detach().cpu() if torch.is_tensor(v) else v) for k, v in output_dict.items()}
 
     return output_dict
 
