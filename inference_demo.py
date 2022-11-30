@@ -229,9 +229,7 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
             # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
             start = time.time()
             if object_det_type == "features":
-                bbox, inp_crop, K_crop = local_feature_obj_detector.detect(
-                    inp, img_path, K
-                )
+                bbox, inp_crop, K_crop = local_feature_obj_detector.detect(inp, img_path, K)
             elif object_det_type == "detection":
                 bbox_orig_res = BboxPredictor.infer_2d_bbox(image_path=img_path, K=K)
                 inp_crop, K_crop = local_feature_obj_detector.crop_img_by_bbox(

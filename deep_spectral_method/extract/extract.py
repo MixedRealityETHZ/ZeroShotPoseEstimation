@@ -79,8 +79,8 @@ def extract_features(
     output_dict['v'] = output_qkv[2].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
 
     # Metadata
-    output_dict["indices"] = indices[0]
-    output_dict["file"] = files[0]
+    output_dict["indices"] = indices
+    output_dict["file"] = files
     output_dict["id"] = id
     output_dict["model_name"] = model_name
     output_dict["patch_size"] = patch_size
