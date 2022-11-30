@@ -9,9 +9,9 @@ class UnsupBbox():
         self.model_name = "dino_vits16"
         self.feature_dir = feature_dir
         self.full_seg_dir = full_seg_dir
-        self.num_workers = 7 # decrease this if out_of_memory error
+        self.num_workers = 0 # decrease this if out_of_memory error
         self.model, self.val_transform, self.patch_size, self.num_heads = utils.get_model(self.model_name)
-
+        
 
     def infer_2d_bbox(self, image_path, K): 
         self.K = K   
@@ -20,7 +20,6 @@ class UnsupBbox():
         dataset = utils.ImagesDataset(
             filenames=[file_name], images_root=images_root, transform=self.val_transform
         )
-
         feature_dict = extract.extract_features(
             output_dir=self.feature_dir,
             batch_size=1,
