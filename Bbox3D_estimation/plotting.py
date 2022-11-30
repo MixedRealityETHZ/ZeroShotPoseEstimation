@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 import matplotlib.patches as mpatches
 import numpy as np
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 
 from lfd import (
     dual_ellipse_to_parameters,
@@ -215,6 +216,22 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, visibility):
     # This forces axes to be equal, but also forces the scene to be a cube.
     # MatPlotLib does not have an "axes equal" function.
     # figure_axes.auto_scale_xyz([-30, 40], [0, -70], [-35, 25])
+
+    Z = points
+    # list of sides' polygons of figure
+    verts = [[Z[0],Z[1],Z[3],Z[2]],
+    [Z[4],Z[5],Z[7],Z[6]],
+    [Z[2],Z[3],Z[7],Z[6]],
+    [Z[0],Z[1],Z[5],Z[4]], 
+    [Z[0],Z[2],Z[6],Z[4]],     
+    [Z[1],Z[3],Z[7],Z[5]]]
+
+    # plot sides
+    figure_axes.add_collection3d(Poly3DCollection(verts, 
+    facecolors='cyan', linewidths=1, edgecolors='r', alpha=.25))
+    
+    figure_axes.scatter(points[:,0], points[:,1], points[:,2])
+
     fig.show()
 
     if save_output_images:
