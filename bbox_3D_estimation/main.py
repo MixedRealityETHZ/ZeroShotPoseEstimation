@@ -1,6 +1,8 @@
 import numpy as np
 from matplotlib import pyplot as plt
 import itertools 
+import glob
+import os
 from utils import get_data, compute_estimates, dual_quadric_to_ellipsoid_parameters
 from plotting import plot_3D_scene
 
@@ -87,43 +89,42 @@ if random_downsample:
 n_frames = visibility.shape[0]
 n_objects = visibility.shape[1]
 
-    ######################################
-    # 2. Run the algorithm: estimate the #
-    #    object ellipsoids for all the   #
-    #    objects in the scene.           #
-    ######################################
+######################################
+# 2. Run the algorithm: estimate the #
+#    object ellipsoids for all the   #
+#    objects in the scene.           #
+######################################
 
-    estQs = compute_estimates(bbs, K, Ms_t, visibility)
+estQs = compute_estimates(bbs, K, Ms_t, visibility)
 
-    ##################################
-    # 3. Get the points of the bbox  #
-    # of the object with object_idx  #
-    ##################################
-    object_idx = 0
-    while(object_idx >= estQs.shape[0] or object_idx < 0):
-        print("Insert a valid object idx, possible values are: " + str(np.arange(0, estQs.shape[0])))
-        object_idx = int(input("Enter your value: "))
-    centre, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[object_idx])
+##################################
+# 3. Get the points of the bbox  #
+# of the object with object_idx  #
+##################################
+object_idx = 0
+while(object_idx >= estQs.shape[0] or object_idx < 0):
+    print("Insert a valid object idx, possible values are: " + str(np.arange(0, estQs.shape[0])))
+    object_idx = int(input("Enter your value: "))
+centre, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[object_idx])
 
-    # Possible coordinates
-    mins = [-ax for (ax) in axes]
-    maxs = [ax for (ax) in axes]
+# Possible coordinates
+mins = [-ax for (ax) in axes]
+maxs = [ax for (ax) in axes]
 
-    # Coordinates of the points mins and maxs
-    points = np.array(list(itertools.product(*zip(mins, maxs))))
+# Coordinates of the points mins and maxs
+points = np.array(list(itertools.product(*zip(mins, maxs))))
 
-    # Points in the camera frame
-    points = np.dot(points, R.T)
+# Points in the camera frame
+points = np.dot(points, R.T)
 
-    # Shift correctly the parralelepiped
-    points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
+# Shift correctly the parralelepiped
+points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
 
 #print(points)
 
 # Plot ellipsoids and camera poses in 3D.
 plot = True
 if plot:
-
     plot_3D_scene(
         estQs=estQs,
         gtQs=estQs,
