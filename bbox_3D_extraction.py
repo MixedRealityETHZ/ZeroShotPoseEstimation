@@ -12,13 +12,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from src.utils import data_utils
 from deep_spectral_method.detection_2D_utils import UnsupBbox
 from bbox_3D_estimation.detection_3D_utils import Detector3D
+from bbox_3D_estimation.utils import sort_path_list
 from bbox_3D_estimation.utils import read_list_poses
-
-
-def sort_path_list(path_list):
-    files = {int(Path(file).stem) : file for file in path_list}
-    ordered_dict = collections.OrderedDict(sorted(files.items()))
-    return list(ordered_dict.values())
 
   
 data_root = os.getcwd() + "/data/onepose_datasets/test_moccona"
