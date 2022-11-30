@@ -35,7 +35,10 @@ from lfd import compute_estimates, dual_quadric_to_ellipsoid_parameters
 def read_list_poses(list):
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
-            pose = np.transpose(np.loadtxt(f_input)[:3, :])
+            orig_pose = np.loadtxt(f_input)
+            orig_pose = np.linalg.inv(orig_pose)
+            pose = np.transpose(orig_pose[:3, :])
+            #pose = np.transpose(np.loadtxt(f_input)[:3, :])
             if idx == 0:
                 poses = pose
             else:
@@ -48,7 +51,7 @@ def read_list_box(list):
     for file_path in list:
         with open(file_path) as f_input:
             line = f_input.read()
-            corpus.append([int(number) for number in line.split(",")])
+            corpus.append([float(number) for number in line.split(",")])
     return np.array(corpus)
 
 
@@ -58,7 +61,7 @@ def read_list_box(list):
 ###########################################
 # Select the dataset to be used.
 # The name of the dataset defines the names of input and output directories.
-dataset = "Aldoma"
+dataset = "tiger"
 
 # Select whether to save output images to files.
 save_output_images = True
@@ -68,11 +71,12 @@ random_downsample = False
 
 if dataset != "Aldoma":
     PATH = f"data/{dataset}"
-    box_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/bounding_boxes", "*.txt"))
-    poses_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/poses_ba", "*.txt"))
+    box_list = sorted(glob.glob(os.path.join(os.getcwd(), f"{PATH}/bounding_boxes", "*.txt")))
+    poses_list = sorted(glob.glob(os.path.join(os.getcwd(), f"{PATH}/poses_ba", "*.txt")))
     intrinsics = f"{PATH}/intrinsics.txt"
     bbs = read_list_box(box_list)
     Ms_t = read_list_poses(poses_list)
+    GT_bb = np.loadtxt(f"{PATH}/box3d_corners.txt")
     visibility = np.ones((bbs.shape[0], 1))
     with open(intrinsics) as f:
         intr = f.readlines()
@@ -83,6 +87,14 @@ if dataset != "Aldoma":
                 [0, 0, 1],
             ]
         )
+        # K = np.array(
+        #     [
+        #         [float(1540), 0, float(719)],
+        #         [0, float(1540), float(963)],
+        #         [0, 0, 1],
+        #     ]
+        # )
+        
 else:
     bbs = np.load('data/{:s}/bounding_boxes.npy'.format(dataset))  
     K = np.load('data/{:s}/intrinsics.npy'.format(dataset))
@@ -91,7 +103,7 @@ else:
 
 
 if random_downsample:
-    randomline = np.random.choice(bbs.shape[0], 10)
+    randomline = np.random.choice(bbs.shape[0], 100)
     visibility[randomline, :] = 1
 
 
@@ -126,6 +138,8 @@ points = np.dot(points, R.T)
 # Shift correctly the parralelepiped
 points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
 
+#print(points)
+
 # Plot ellipsoids and camera poses in 3D.
 plot = True
 if plot:
@@ -136,5 +150,7 @@ if plot:
         Ms_t=Ms_t,
         dataset=dataset,
         save_output_images=save_output_images,
+        points=points,
+        GT_points=GT_bb        
     )
     plt.show()

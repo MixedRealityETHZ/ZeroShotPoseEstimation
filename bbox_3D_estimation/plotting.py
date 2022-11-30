@@ -180,30 +180,31 @@ def plot_camera(M, figure_axes):
     y = points[1, :].reshape(2, 5)
     z = points[2, :].reshape(2, 5)
 
-    figure_axes.plot_wireframe(
-        x, y, z, rstride=1, cstride=1, color=[0, 0, 0], linewidth=0.5
-    )
+    # figure_axes.plot_wireframe(
+    #     x, y, z, rstride=1, cstride=1, color=[0, 0, 0], linewidth=0.5
+    # )
+    figure_axes.scatter(t[0], t[1], t[2])
 
 
-def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, points, visibility=None):
+def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, points, GT_points, visibility=None):
     """Plot """
     fig = plt.figure(figsize=(8, 8))  # Open a new figure.
     figure_axes = fig.add_subplot(111, projection="3d")
 
-    # Plot the GT ellipsoids in red.
-    for ellipsoid_id in range(gtQs.shape[0]):
-        plot_ellipsoid(gtQs[ellipsoid_id, :, :], [1, 0, 0], figure_axes)
+    # # Plot the GT ellipsoids in red.
+    # for ellipsoid_id in range(gtQs.shape[0]):
+    #     plot_ellipsoid(gtQs[ellipsoid_id, :, :], [1, 0, 0], figure_axes)
 
     # Plot the estimated ellipsoids in blue.
-    for ellipsoid_id in range(estQs.shape[0]):
-        # Plot only if the data is valid
-        if not ((np.isnan(estQs[ellipsoid_id, :, :])).any()):
-            _ = plot_ellipsoid(estQs[ellipsoid_id, :, :], [0, 0, 1], figure_axes)
+    # for ellipsoid_id in range(estQs.shape[0]):
+    #     # Plot only if the data is valid
+    #     if not ((np.isnan(estQs[ellipsoid_id, :, :])).any()):
+    #         _ = plot_ellipsoid(estQs[ellipsoid_id, :, :], [0, 0, 1], figure_axes)
 
     # Plot the camera poses in black.
-    for ind, pose_id in enumerate(range(Ms_t.shape[0] // 4)):
-        if visibility is None or visibility[ind]==1:
-            plot_camera(Ms_t[pose_id * 4 : pose_id * 4 + 4, :].transpose(), figure_axes)
+    # for ind, pose_id in enumerate(range(Ms_t.shape[0] // 4)):
+    #     if visibility is None or visibility[ind]==1:
+    #         plot_camera(Ms_t[pose_id * 4 : pose_id * 4 + 4, :].transpose(), figure_axes)
 
     figure_axes.set_xlabel("X axis")
     figure_axes.set_ylabel("Y axis")
@@ -211,7 +212,6 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, points, visibi
 
     red_patch = mpatches.Patch(color="red", label="GT")
     blue_patch = mpatches.Patch(color="blue", label="Estimates")
-    plt.legend(handles=[red_patch, blue_patch])
 
     # This forces axes to be equal, but also forces the scene to be a cube.
     # MatPlotLib does not have an "axes equal" function.
@@ -231,6 +231,23 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, points, visibi
     facecolors='cyan', linewidths=1, edgecolors='r', alpha=.25))
     
     figure_axes.scatter(points[:,0], points[:,1], points[:,2])
+
+    if GT_points is not None:
+        Z = GT_points
+        # list of sides' polygons of figure
+        verts = [[Z[0],Z[1],Z[3],Z[2]],
+        [Z[4],Z[5],Z[7],Z[6]],
+        [Z[2],Z[3],Z[7],Z[6]],
+        [Z[0],Z[1],Z[5],Z[4]], 
+        [Z[0],Z[2],Z[6],Z[4]],     
+        [Z[1],Z[3],Z[7],Z[5]]]
+
+        # plot sides
+        figure_axes.add_collection3d(Poly3DCollection(verts, 
+        facecolors='blue', linewidths=1, edgecolors='r', alpha=.25))
+        
+        figure_axes.scatter(GT_points[:,0], GT_points[:,1], GT_points[:,2])
+
 
     fig.show()
 
