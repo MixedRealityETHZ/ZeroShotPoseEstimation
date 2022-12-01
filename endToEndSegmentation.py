@@ -13,10 +13,10 @@ from torch.utils.data import DataLoader
 
 
 def main():
-    extract_video = False
+    extract_video = True
     plot = True
     on_GPU = True
-    video_path = "./tiger.mp4"
+    video_path = "./Frames2.m4v"
     images_folder = "/images"
     imlist_folder = "/lists"
     file_txt = "/images.txt"
@@ -73,30 +73,15 @@ def main():
     )
 
     # here we are creating sub plots
-    for k, (images, files, indices) in enumerate(tqdm(dataloader)):
-
-        feature_dict = extract.extract_features(
+    for k, (images, _, _) in enumerate(tqdm(dataloader)):
+        bbox = extract_bbox(
             model=model,
             patch_size=patch_size,
             num_heads=num_heads,
             accelerator=accelerator,
             feat_out=feat_out,
             images=images,
-            files=files,
-            indices=indices,
-        )
-
-        eigs_dict = extract._extract_eig(K=4, data_dict=feature_dict, on_gpu=on_GPU)
-
-        # Segmentation
-        segmap = extract.extract_single_region_segmentations(
-            feature_dict=feature_dict,
-            eigs_dict=eigs_dict,
-        )
-
-        bbox = extract.extract_bboxes(
-            feature_dict=feature_dict,
-            segmap=segmap,
+            on_GPU=on_GPU,
         )
 
         if plot:
@@ -117,6 +102,30 @@ def main():
             plt.show(block=False)
             plt.pause(0.0001)
             plt.clf()
+
+
+def extract_bbox(model, patch_size, num_heads, accelerator, feat_out, images, on_GPU):
+    feature_dict = extract.extract_features(
+        model=model,
+        patch_size=patch_size,
+        num_heads=num_heads,
+        accelerator=accelerator,
+        feat_out=feat_out,
+        images=images,
+    )
+
+    eigs_dict = extract._extract_eig(K=4, data_dict=feature_dict, on_gpu=on_GPU)
+
+    # Segmentation
+    segmap = extract.extract_single_region_segmentations(
+        feature_dict=feature_dict,
+        eigs_dict=eigs_dict,
+    )
+
+    return extract.extract_bboxes(
+        feature_dict=feature_dict,
+        segmap=segmap,
+    )
 
 
 if __name__ == "__main__":

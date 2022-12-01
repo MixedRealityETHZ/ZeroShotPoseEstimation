@@ -27,8 +27,6 @@ def extract_features(
     accelerator: Accelerator,
     feat_out: dict,
     images,
-    files,
-    indices,
 ):
 
     """
@@ -62,8 +60,6 @@ def extract_features(
     output_dict["k"] = output_qkv[1].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
 
     # Metadata
-    output_dict["indices"] = indices[0]
-    output_dict["file"] = files[0]
     output_dict["patch_size"] = patch_size
     output_dict["shape"] = images.shape
     output_dict = {
