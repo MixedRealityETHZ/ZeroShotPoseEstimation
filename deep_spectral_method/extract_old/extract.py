@@ -7,24 +7,28 @@ import fire
 import numpy as np
 import torch
 import torch.nn.functional as F
+from accelerate import Accelerator
 from PIL import Image
+from scipy.sparse.linalg import eigsh
 from sklearn.cluster import KMeans, MiniBatchKMeans
+import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from torchvision.utils import draw_bounding_boxes
 from tqdm import tqdm
-from accelerate import Accelerator
-from scipy.sparse.linalg import eigsh
-
+# CRF
+import denseCRF 
 from . import extract_utils as utils
 
-# import extract_utils as utils
-
-
 def extract_features(
+    model_name: str,
+    batch_size: int,
+    output_dir: str,
     model: dict,
-    patch_size: int,
+    patch_size:int,
     num_heads: int,
-    images,
+    dataset: dict,
+    which_block: int = -1,
+    num_workers: int = 0,
 ):
 
     """
@@ -39,104 +43,187 @@ def extract_features(
             --batch_size 1
     """
 
-    output_dict = {}
+    device = "cpu"
+    # Add hook
     feat_out = {}
 
     def hook_fn_forward_qkv(module, input, output):
         feat_out["qkv"] = output
 
-    model._modules["blocks"][-1]._modules["attn"]._modules["qkv"].register_forward_hook(
-        hook_fn_forward_qkv
-    )
+    model._modules["blocks"][which_block]._modules["attn"]._modules["qkv"].register_forward_hook(hook_fn_forward_qkv)
+    model.to(device)
+
+    # Process
+    images, files, indices = dataset[0]
+    output_dict = {}
+
+    # Check if file already exists
+    id = Path(files[0]).stem
 
     # Reshape image
+    images = images.unsqueeze(0)
     P = patch_size
-    images = torch.from_numpy(images.transpose((-1,0,1))[np.newaxis,...]).type(torch.float)
     B, C, H, W = images.shape
     H_patch, W_patch = H // P, W // P
     H_pad, W_pad = H_patch * P, W_patch * P
     T = H_patch * W_patch + 1  # number of tokens, add 1 for [CLS]
-    images = images[:, :, :H_pad, :W_pad]
+    # images = F.interpolate(images, size=(H_pad, W_pad), mode='bilinear')  # resize image
+    images = images[:, :, :H_pad, :W_pad].to(device)
 
+    # Forward and collect features into output dict
     model.get_intermediate_layers(images)[0].squeeze(0)
-    output_qkv = (
-        feat_out["qkv"]
-        .reshape(B, T, 3, num_heads, -1 // num_heads)
-        .permute(2, 0, 3, 1, 4)
-    )
+
+    output_qkv = feat_out["qkv"].reshape(B, T, 3, num_heads, -1 // num_heads).permute(2, 0, 3, 1, 4)
+    output_dict['q'] = output_qkv[0].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
     output_dict["k"] = output_qkv[1].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
+    output_dict['v'] = output_qkv[2].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
 
     # Metadata
-    #output_dict["indices"] = indices[0]
-    #output_dict["file"] = files[0]
+    output_dict["indices"] = indices
+    output_dict["file"] = files
+    output_dict["id"] = id
+    output_dict["model_name"] = model_name
     output_dict["patch_size"] = patch_size
-    output_dict["shape"] = images.shape
-    output_dict = {
-        k: (v.detach().cpu() if torch.is_tensor(v) else v)
-        for k, v in output_dict.items()
-    }
+    output_dict["shape"] = (B, C, H, W)
+    output_dict = {k: (v.detach().cpu() if torch.is_tensor(v) else v) for k, v in output_dict.items()}
 
     return output_dict
 
 
 def _extract_eig(
+    inp: Tuple[int, str],
     K: int,
     data_dict: dict,
-    on_gpu: bool = False,
+    image_file: int,
+    which_matrix: str = "laplacian",
     which_features: str = "k",
+    normalize: bool = True,
+    lapnorm: bool = True,
+    which_color_matrix: str = "knn",
+    threshold_at_zero: bool = True,
+    image_downsample_factor: Optional[int] = None,
+    image_color_lambda: float = 10,
+    
+
 ):
-    if on_gpu:
-        device = "cuda"
-    else:
-        device = "cpu"
+    a, a = inp
 
-    feats = data_dict[which_features].squeeze().to(device)
-    feats = F.normalize(feats, p=2, dim=-1)
+    feats = data_dict[which_features].squeeze().cpu()
 
-    # Get sizes
-    B, C, H, W, P, H_patch, W_patch, H_pad, W_pad = utils.get_image_sizes(data_dict)
-    image_downsample_factor = P
-    H_pad_lr, W_pad_lr = (
-        H_pad // image_downsample_factor,
-        W_pad // image_downsample_factor,
-    )
+    if normalize:
+        feats = F.normalize(feats, p=2, dim=-1)
 
-    # Upscale features to match the resolution
-    if (H_patch, W_patch) != (H_pad_lr, W_pad_lr):
-        feats = (
-            F.interpolate(
-                feats.T.reshape(1, -1, H_patch, W_patch),
-                size=(H_pad_lr, W_pad_lr),
-                mode="bilinear",
-                align_corners=False,
-            )
-            .reshape(-1, H_pad_lr * W_pad_lr)
-            .T
-        )
-
-    ### Feature affinities
-    W_feat = feats @ feats.T
-    W_feat = W_feat * (W_feat > 0)
-    W_feat = W_feat.cpu().numpy()
-
-    # Combine  # combination
-    D_feat = torch.Tensor(utils.get_diagonal(W_feat)).to(device)
-    W_tensor = torch.from_numpy(W_feat).to(device)
-    WD_diff = torch.Tensor(D_feat - W_tensor)
-
-    # Extract eigenvectors
-    if on_gpu:
-        eigenvalues, eigenvectors = torch.lobpcg(
-            A=WD_diff, B=D_feat, k=K, largest=False
-        )
+    # Eigenvectors of affinity matrix
+    if which_matrix == "affinity_torch":
+        W = feats @ feats.T
+        if threshold_at_zero:
+            W = W * (W > 0)
+        eigenvalues, eigenvectors = torch.eig(W, eigenvectors=True)
         eigenvalues = eigenvalues.cpu()
-        eigenvectors = eigenvectors.T.cpu()
-    else:
-        eigenvalues, eigenvectors = eigsh(
-            A=WD_diff.cpu().numpy(), k=K, M=D_feat.cpu().numpy(), which="SM"
+        eigenvectors = eigenvectors.cpu()
+
+    # Eigenvectors of affinity matrix with scipy
+    elif which_matrix == "affinity_svd":
+        USV = torch.linalg.svd(feats, full_matrices=False)
+        eigenvectors = USV[0][:, :K].T.to("cpu", non_blocking=True)
+        eigenvalues = USV[1][:K].to("cpu", non_blocking=True)
+
+    # Eigenvectors of affinity matrix with scipy
+    elif which_matrix == "affinity":
+        W = feats @ feats.T
+        if threshold_at_zero:
+            W = W * (W > 0)
+        W = W.cpu().numpy()
+        eigenvalues, eigenvectors = eigsh(W, which="LM", k=K)
+        eigenvectors = torch.flip(torch.from_numpy(eigenvectors), dims=(-1,)).T
+
+    # Eigenvectors of matting laplacian matrix
+    elif which_matrix in ["matting_laplacian", "laplacian"]:
+
+        # Get sizes
+        B, C, H, W, P, H_patch, W_patch, H_pad, W_pad = utils.get_image_sizes(data_dict)
+        if image_downsample_factor is None:
+            image_downsample_factor = P
+        H_pad_lr, W_pad_lr = (
+            H_pad // image_downsample_factor,
+            W_pad // image_downsample_factor,
         )
-        eigenvalues = torch.from_numpy(eigenvalues)
-        eigenvectors = torch.from_numpy(eigenvectors.T)
+
+        # Upscale features to match the resolution
+        if (H_patch, W_patch) != (H_pad_lr, W_pad_lr):
+            feats = (
+                F.interpolate(
+                    feats.T.reshape(1, -1, H_patch, W_patch),
+                    size=(H_pad_lr, W_pad_lr),
+                    mode="bilinear",
+                    align_corners=False,
+                )
+                .reshape(-1, H_pad_lr * W_pad_lr)
+                .T
+            )
+
+        ### Feature affinities
+        W_feat = feats @ feats.T
+        if threshold_at_zero:
+            W_feat = W_feat * (W_feat > 0)
+        W_feat = (
+            W_feat / W_feat.max()
+        )  # NOTE: If features are normalized, this naturally does nothing
+        W_feat = W_feat.cpu().numpy()
+
+        ### Color affinities
+        # If we are fusing with color affinites, then load the image and compute
+        if image_color_lambda > 0:
+
+            # Load image
+
+            #Take the image_file
+            image_lr = Image.fromarray(image_file).resize(
+                (W_pad_lr, H_pad_lr), Image.BILINEAR
+            )
+            image_lr = np.array(image_lr) / 255.0
+
+            # Color affinities (of type scipy.sparse.csr_matrix)
+            if which_color_matrix == "knn":
+                W_lr = utils.knn_affinity(image_lr / 255)
+            elif which_color_matrix == "rw":
+                W_lr = utils.rw_affinity(image_lr / 255)
+
+            # Convert to dense numpy array
+            W_color = np.array(W_lr.todense().astype(np.float32))
+
+        else:
+
+            # No color affinity
+            W_color = 0
+
+        # Combine
+        W_comb = W_feat + W_color * image_color_lambda  # combination
+        D_comb = np.array(
+            utils.get_diagonal(W_comb).todense()
+        )  # is dense or sparse faster? not sure, should check
+
+        # Extract eigenvectors
+        if lapnorm:
+            try:
+                eigenvalues, eigenvectors = eigsh(
+                    D_comb - W_comb, k=K, sigma=0, which="LM", M=D_comb
+                )
+            except:
+                eigenvalues, eigenvectors = eigsh(
+                    D_comb - W_comb, k=K, which="SM", M=D_comb
+                )
+        else:
+            try:
+                eigenvalues, eigenvectors = eigsh(
+                    D_comb - W_comb, k=K, sigma=0, which="LM"
+                )
+            except:
+                eigenvalues, eigenvectors = eigsh(D_comb - W_comb, k=K, which="SM")
+        eigenvalues, eigenvectors = (
+            torch.from_numpy(eigenvalues),
+            torch.from_numpy(eigenvectors.T).float(),
+        )
 
     # Sign ambiguity
     for k in range(eigenvectors.shape[0]):
@@ -145,17 +232,27 @@ def _extract_eig(
         ):  # reverse segment
             eigenvectors[k] = 0 - eigenvectors[k]
 
-    # # Save dict
+    # Save dict
 
     eig_dict = {"eigenvalues": eigenvalues, "eigenvectors": eigenvectors}
-
+    
+    
+    #torch.save(output_dict, output_file)
     return eig_dict
 
 
 def extract_eigs(
+    image_file: int,
+    which_matrix: str = "laplacian",
+    which_color_matrix: str = "knn",
     which_features: str = "k",
+    normalize: bool = True,
+    threshold_at_zero: bool = True,
     lapnorm: bool = True,
     K: int = 20,
+    image_downsample_factor: Optional[int] = None,
+    image_color_lambda: float = 0.0,
+    multiprocessing: int = 0,
     data_dict: dict = None,
 ):
     """
@@ -171,15 +268,23 @@ def extract_eigs(
     """
     kwargs = dict(
         K=K,
+        which_matrix=which_matrix,
         which_features=which_features,
+        which_color_matrix=which_color_matrix,
+        normalize=normalize,
+        threshold_at_zero=threshold_at_zero,
+        image_downsample_factor=image_downsample_factor,
+        image_color_lambda=image_color_lambda,
         lapnorm=lapnorm,
         data_dict=data_dict,
+        image_file=image_file,
     )
-
-    eig_dict = _extract_eig(**kwargs)
-
+    fn = partial(_extract_eig, **kwargs)
+    #inputs = list(enumerate(sorted(Path(features_dir).iterdir())))
+    inputs = list(enumerate([1]))
+    
+    eig_dict = utils.parallel_process(inputs, fn, multiprocessing)
     return eig_dict
-
 
 def _extract_multi_region_segmentations(
     inp: Tuple[int, Tuple[str, str]],
@@ -189,6 +294,7 @@ def _extract_multi_region_segmentations(
     kmeans_baseline: bool,
     output_dir: str,
     num_eigenvectors: int,
+
 ):
     index, (feature_path, eigs_path) = inp
 
@@ -293,23 +399,23 @@ def extract_multi_region_segmentations(
 def _extract_single_region_segmentations(
     inp: Tuple[int, int],
     threshold: float,
-    feature_dict: dict,
-    eigs_dict: dict,
+    feature_dict:dict,
+    eigs_dict:dict,
 ):
-    # index, (feature_path, eigs_path) = inp
+    #index, (feature_path, eigs_path) = inp
 
     # Load
-    # data_dict = torch.load(feature_path, map_location="cpu")
-    # data_dict.update(torch.load(eigs_path, map_location="cpu"))
+    #data_dict = torch.load(feature_path, map_location="cpu")
+    #data_dict.update(torch.load(eigs_path, map_location="cpu"))
 
     data_dict = feature_dict
     data_dict.update(eigs_dict)
 
     # Output file
-    # id = Path(data_dict["id"])
-    # output_file = str(Path(output_dir) / f"{id}.png")
-
-    # if Path(output_file).is_file():
+    #id = Path(data_dict["id"])
+    #output_file = str(Path(output_dir) / f"{id}.png")
+   
+    #if Path(output_file).is_file():
     #    print(f"Skipping existing file {str(output_file)}")
     #    return  # skip because already generated
 
@@ -323,7 +429,7 @@ def _extract_single_region_segmentations(
     segmap = (eigenvector > threshold).reshape(H_patch, W_patch)
 
     # Save dict
-    # Image.fromarray(segmap).convert("L").save(output_file)
+    #Image.fromarray(segmap).convert("L").save(output_file)
     return Image.fromarray(segmap).convert("L")
 
 
@@ -332,6 +438,7 @@ def extract_single_region_segmentations(
     eigs_dict: dict,
     threshold: float = 0.0,
     multiprocessing: int = 0,
+    
 ):
     """
     Example:
@@ -340,21 +447,18 @@ def extract_single_region_segmentations(
         --eigs_dir "./data/VOC2012/eigs/laplacian" \
         --output_dir "./data/VOC2012/single_region_segmentation/patches" \
     """
-
+    
     fn = partial(
-        _extract_single_region_segmentations,
-        threshold=threshold,
-        feature_dict=feature_dict,
-        eigs_dict=eigs_dict,
+        _extract_single_region_segmentations, threshold=threshold, 
+        feature_dict=feature_dict, eigs_dict=eigs_dict
     )
 
-    inputs = [1, 2]
+    inputs = [1,2]
     output = utils.parallel_process(inputs, fn, multiprocessing)
     return output
 
-
 def _extract_bbox(
-    # inp: Tuple[str, str],
+    #inp: Tuple[str, str],
     num_erode: int,
     num_dilate: int,
     skip_bg_index: bool,
@@ -362,11 +466,14 @@ def _extract_bbox(
     segmap: bool,
     downsample_factor: Optional[int] = None,
 ):
-    # index, (feature_path, segmentation_path) = inp
+    #index, (feature_path, segmentation_path) = inp
 
     # Load
+    #data_dict = torch.load(feature_path, map_location="cpu")
     data_dict = feature_dict
     segmap = np.array(segmap)
+    
+    image_id = data_dict["id"]
 
     # Sizes
     B, C, H, W, P, H_patch, W_patch, H_pad, W_pad = utils.get_image_sizes(
@@ -378,7 +485,7 @@ def _extract_bbox(
         "bboxes": [],
         "bboxes_original_resolution": [],
         "segment_indices": [],
-        "id": 0,
+        "id": image_id,
         "format": "(xmin, ymin, xmax, ymax)",
     }
     for segment_index in sorted(np.unique(segmap).tolist()):
@@ -419,8 +526,8 @@ def _extract_bbox(
 def extract_bboxes(
     feature_dict: dict,
     segmap: bool,
-    num_erode: int = 2,  # default 2
-    num_dilate: int = 2,  # default 3
+    num_erode: int = 2, #default 2
+    num_dilate: int = 2, #default 3
     skip_bg_index: bool = True,
     downsample_factor: Optional[int] = None,
 ):
@@ -433,24 +540,24 @@ def extract_bboxes(
         --num_erode 2 --num_dilate 5 \
         --output_file "./data/VOC2012/multi_region_bboxes/fixed/bboxes_e2_d5.pth" \
     """
-    # utils.make_output_dir(str(Path(output_file).parent), check_if_empty=False)
+    #utils.make_output_dir(str(Path(output_file).parent), check_if_empty=False)
     fn = partial(
         _extract_bbox,
         num_erode=num_erode,
         num_dilate=num_dilate,
         skip_bg_index=skip_bg_index,
         downsample_factor=downsample_factor,
-        feature_dict=feature_dict,
-        segmap=segmap,
+        feature_dict = feature_dict,
+        segmap = segmap,
     )
-    inputs = list([1, 2, 3])
+    inputs = list([1,2,3])
     output = fn()
 
-    # inputs = utils.get_paired_input_files(features_dir, segmentations_dir)
+    #inputs = utils.get_paired_input_files(features_dir, segmentations_dir)
 
-    # all_outputs = [fn(inp) for inp in tqdm(inputs, desc="Extracting bounding boxes")]
-    # torch.save(all_outputs, output_file)
-    # print("Done")
+    #all_outputs = [fn(inp) for inp in tqdm(inputs, desc="Extracting bounding boxes")]
+    #torch.save(all_outputs, output_file)
+    print("Done")
     return output
 
 
@@ -627,19 +734,20 @@ def _extract_crf_segmentations(
     output_dir: str,
     crf_params: Tuple,
     segmap: bool,
-    image_file: int,
-    id: int,
+    image_file:int,
+    id:int,
     downsample_factor: int = 16,
+    
 ):
 
     # Output file
-    # id = Path(image_file).stem
+    #id = Path(image_file).stem
+    
+    #output_file = str(Path(output_dir) / f"{id}.png")
 
-    # output_file = str(Path(output_dir) / f"{id}.png")
-
-    # image = np.array(Image(image_file).convert("RGB"))  # (H_patch, W_patch, 3)
+    #image = np.array(Image(image_file).convert("RGB"))  # (H_patch, W_patch, 3)
     image = np.array(image_file)
-    # segmap = np.array(Image.open(segmap_path))  # (H_patch, W_patch)
+    #segmap = np.array(Image.open(segmap_path))  # (H_patch, W_patch)
     segmap = np.array((segmap))
 
     # Sizes
@@ -663,7 +771,7 @@ def _extract_crf_segmentations(
     if set(np.unique(segmap_orig_res).tolist()) == {0, 255}:
         segmap_orig_res[segmap_orig_res == 255] = 1
 
-    # make sure you've installed SimpleCRF
+     # make sure you've installed SimpleCRF
 
     unary_potentials = F.one_hot(
         torch.from_numpy(segmap_orig_res).long(), num_classes=num_classes
@@ -674,9 +782,9 @@ def _extract_crf_segmentations(
 
     # Save
     segmented_im = Image.fromarray(segmap_crf).convert("L")
-
-    # plt.imsave(output_file, segmented_im)
-    """
+    
+    #plt.imsave(output_file, segmented_im)
+    '''
     orig_image = image_file
     
     plt.imshow(orig_image)
@@ -684,16 +792,16 @@ def _extract_crf_segmentations(
     plt.savefig(output_file)
     plt.show()
     plt.close()
-    """
-
+    '''
+    
     return segmap_crf
 
 
 def extract_crf_segmentations(
     output_dir: str,
-    segmap: bool,
-    image_file: int,
-    id: int,
+    segmap:bool,
+    image_file:int,
+    id:int,
     num_classes: int = 21,
     downsample_factor: int = 16,
     multiprocessing: int = 0,
@@ -723,7 +831,7 @@ def extract_crf_segmentations(
             "pip3 install SimpleCRF"
         )
 
-    # utils.make_output_dir(output_dir)
+    #utils.make_output_dir(output_dir)
 
     fn = partial(
         _extract_crf_segmentations,
@@ -736,13 +844,12 @@ def extract_crf_segmentations(
         id=id,
     )
 
-    # inputs = utils.get_paired_input_files(images_list, segmentations_dir)
-    # inputs = list(enumerate(zip(image_file, 0)))
-    inputs = [0, 0]
+    #inputs = utils.get_paired_input_files(images_list, segmentations_dir)
+    #inputs = list(enumerate(zip(image_file, 0)))
+    inputs = [0,0]
 
     output = utils.parallel_process(inputs, fn, multiprocessing)
     return output
-
 
 def vis_segmentations(
     images_list: str,

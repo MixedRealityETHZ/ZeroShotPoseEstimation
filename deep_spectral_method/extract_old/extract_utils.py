@@ -19,13 +19,15 @@ class ImagesDataset(Dataset):
 
     def __init__(
         self,
-        filenames: list,
+        filenames: str,
         images_root: Optional[str] = None,
         transform: Optional[Callable] = None,
         prepare_filenames: bool = True,
     ) -> None:
         self.root = None if images_root is None else Path(images_root)
-        self.filenames = sorted(filenames) if prepare_filenames else filenames
+        self.filenames = (
+            sorted(list(set(filenames))) if prepare_filenames else filenames
+        )
         self.transform = transform
 
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
@@ -40,7 +42,6 @@ class ImagesDataset(Dataset):
 
     def __len__(self) -> int:
         return len(self.filenames)
-
 
 def get_model(name: str):
     if "dino" in name:
@@ -155,8 +156,8 @@ def get_border_fraction(segmap: np.array):
     return indices, normlized_counts
 
 
-def parallel_process(inputs: Iterable, fn: Callable, multiprocessing: bool = False):
-
+def parallel_process(inputs: Iterable, fn: Callable, multiprocessing: int = 0):
+    
     if multiprocessing:
         print("Starting multiprocessing")
         with Pool(multiprocessing) as pool:
@@ -165,7 +166,7 @@ def parallel_process(inputs: Iterable, fn: Callable, multiprocessing: bool = Fal
     else:
         for inp in inputs:
             eig_dict = fn(inp)
-
+    
     return eig_dict
 
 
@@ -226,8 +227,10 @@ def rw_affinity(image, sigma=0.033, radius=1):
 
 
 def get_diagonal(W: scipy.sparse.csr_matrix, threshold: float = 1e-12):
+    # See normalize_rows in pymatting.util.util
+    from pymatting.util.util import row_sum
 
-    D = np.sum(W, axis=0)
+    D = row_sum(W)
     D[D < threshold] = 1.0  # Prevent division by zero.
-    D = np.diag(D)
+    D = scipy.sparse.diags(D)
     return D
