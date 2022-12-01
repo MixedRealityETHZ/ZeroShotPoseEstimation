@@ -167,7 +167,7 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
         pass
     elif object_det_type == "detection":
         feature_dir = data_root + "/DSM_features"
-        BboxPredictor = UnsupBbox(feature_dir=feature_dir)
+        BboxPredictor = UnsupBbox(feature_dir=feature_dir, downscale_factor=0.3, on_GPU=False)
 
     # Load models and prepare data:
     matching_model, extractor_model = load_model(cfg)
@@ -184,16 +184,19 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
     if box_3D_detect_type=="sfm_based":
         bbox3d = compute_3dbbox_from_sfm(sfm_ws_dir=sfm_ws_dir, data_root=data_root)
     else:
-        from bbox_3D_extraction import predict_3D_bboxes
+        from bbox_3D_extraction import predict_3D_bboxes 
         logger.info(f"3d bbox estimated with {box_3D_detect_type} method, reading from file")
         segment_dir = data_root + "/test_moccona-annotate"
         intriscs_path = segment_dir + "/intrinsics.txt"
+
         K, _ = data_utils.get_K(intriscs_path)
         poses_list_anno = glob.glob(os.path.join(os.getcwd(), f"{segment_dir}/poses", "*.txt"))
         poses_list_anno = sort_path_list(poses_list_anno)
         img_lists_anno = glob.glob(os.path.join(os.getcwd(), f"{segment_dir}/color_full", "*.png"))
         img_lists_anno = sort_path_list(img_lists_anno)
-        predict_3D_bboxes(BboxPredictor, img_lists_anno, poses_list_anno, K)
+
+        # TODO: fix 3d bbox estimation
+        #predict_3D_bboxes(BboxPredictor, img_lists_anno, poses_list_anno, K)
 
     box3d_path = path_utils.get_3d_box_path(data_root)
 

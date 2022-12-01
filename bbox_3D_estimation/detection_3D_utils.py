@@ -15,22 +15,19 @@ class Detector3D():
         if self.bboxes is None:
             self.bboxes = bbox_t
         else:
-            self.bboxes = np.stack(self.bboxes, bbox_t)
+            self.bboxes = np.vstack((self.bboxes, bbox_t))
         
         if self.poses is None:
             self.poses = pose_t
         else:
-            self.poses = np.stack(self.poses, pose_t)
-
+            self.poses = np.vstack((self.poses, pose_t))
+        
 
     def detect_3D_box(self):
         object_idx = 0
-        visibility = np.ones_like(self.poses)
-        estQs = compute_estimates(self.bboxes, self.K, self.poses, visibility)
-        # while(object_idx >= estQs.shape[0] or object_idx < 0):
-        #     print("Insert a valid object idx, possible values are: " + str(np.arange(0, estQs.shape[0])))
-        #     object_idx = int(input("Enter your value: "))
-        
+        selected_frames = self.bboxes.shape[0]
+        self.visibility = np.ones((selected_frames,1))
+        estQs = compute_estimates(self.bboxes, self.K, self.poses, self.visibility)
         centre, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[object_idx])
 
         # Possible coordinates
