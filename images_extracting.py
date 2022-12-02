@@ -8,10 +8,9 @@ from os.path import isfile, join
 
 # TODO: use pathlib.Path for path setting
 name_len = 6
-downscale_factor = 0.3
 
 
-def extract_images(video_path: str, images_root):
+def extract_images(video_path: str, images_root, downscale_factor):
     cam = cv2.VideoCapture(video_path)
     try:
         if not os.path.exists(images_root):

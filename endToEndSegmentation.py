@@ -8,15 +8,17 @@ from PIL import Image
 from matplotlib.patches import Rectangle
 import time
 from accelerate import Accelerator
+import os
 
 from torch.utils.data import DataLoader
 
 
 def main():
     extract_video = True
-    plot = True
+    plot = False
     on_GPU = True
-    video_path = "./Frames2.m4v"
+    DATA = "/home/pippo809/git/MR/ZeroShotPoseEstimation/data/pikachubowl-1"
+    video_path = f"{DATA}/Frames.m4v"
     images_folder = "/images"
     imlist_folder = "/lists"
     file_txt = "/images.txt"
@@ -27,8 +29,10 @@ def main():
     sr_segmentations = "/single_region_segmentation/patches/filtered"
     full_segmentations = "/single_region_segmentation/crf/laplacian_dino_vits16"
 
-    images_root = default_data_path + images_folder
-    imlist_root = default_data_path + imlist_folder
+    downscale_factor = 0.3
+
+    images_root = DATA + images_folder
+    imlist_root = DATA + imlist_folder
     images_list = imlist_root + file_txt
     feature_dir = default_data_path + feature_relative_path
     eigs_dir = default_data_path + eigs_relative_path
@@ -40,7 +44,7 @@ def main():
     # You can get this by running the normal DSM applied to the video recorded by Roberto
 
     if extract_video:
-        images_extracting.extract_images(video_path, images_root)
+        images_extracting.extract_images(video_path, images_root, downscale_factor = 0.3)
         images_extracting.write_images_txt(imlist_root, file_txt, images_root)
 
     # list files in img directory, this is the txt file containing the name of all images
@@ -73,6 +77,7 @@ def main():
     )
 
     # here we are creating sub plots
+    bboxes = []
     for k, (images, _, _) in enumerate(tqdm(dataloader)):
         bbox = extract_bbox(
             model=model,
@@ -83,7 +88,8 @@ def main():
             images=images,
             on_GPU=on_GPU,
         )
-
+        bboxes.append(bbox)
+    
         if plot:
             # Bounding boxes
             limits = bbox["bboxes_original_resolution"][0]
@@ -102,6 +108,11 @@ def main():
             plt.show(block=False)
             plt.pause(0.0001)
             plt.clf()
+    bbox_path = f"{DATA}/bboxes/"
+    os.makedirs(bbox_path, exist_ok=True)
+    for idx, bbox in enumerate(bboxes):
+        with open(f"{bbox_path}{idx}.txt", "w") as f:
+            f.write(",".join(map(str, [coord/downscale_factor for coord in bbox['bboxes_original_resolution'][0]])))
 
 
 def extract_bbox(model, patch_size, num_heads, accelerator, feat_out, images, on_GPU):
