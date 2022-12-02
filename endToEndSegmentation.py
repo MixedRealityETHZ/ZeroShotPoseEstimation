@@ -15,10 +15,11 @@ from torch.utils.data import DataLoader
 
 def main():
     extract_video = True
-    plot = False
+    plot = True
+    save_bb = False
     on_GPU = True
-    DATA = "/home/pippo809/git/MR/ZeroShotPoseEstimation/data/pikachubowl-1"
-    video_path = f"{DATA}/Frames.m4v"
+    DATA = "/home/pippo809/git/MR/ZeroShotPoseEstimation/data/tiger"
+    video_path = f"{DATA}/Frames.mp4"
     images_folder = "/images"
     imlist_folder = "/lists"
     file_txt = "/images.txt"
@@ -109,10 +110,11 @@ def main():
             plt.pause(0.0001)
             plt.clf()
     bbox_path = f"{DATA}/bboxes/"
-    os.makedirs(bbox_path, exist_ok=True)
-    for idx, bbox in enumerate(bboxes):
-        with open(f"{bbox_path}{idx}.txt", "w") as f:
-            f.write(",".join(map(str, [coord/downscale_factor for coord in bbox['bboxes_original_resolution'][0]])))
+    if save_bb:
+        os.makedirs(bbox_path, exist_ok=True)
+        for idx, bbox in enumerate(bboxes):
+            with open(f"{bbox_path}{idx}.txt", "w") as f:
+                f.write(",".join(map(str, [coord/downscale_factor for coord in bbox['bboxes_original_resolution'][0]])))
 
 
 def extract_bbox(model, patch_size, num_heads, accelerator, feat_out, images, on_GPU):
