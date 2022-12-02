@@ -15,7 +15,7 @@ import matplotlib.patches as mpatches
 import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 
-from .lfd import (
+from lfd import (
     dual_ellipse_to_parameters,
     project_ellipsoids,
     dual_quadric_to_ellipsoid_parameters,
@@ -202,9 +202,9 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, points, GT_poi
     #         _ = plot_ellipsoid(estQs[ellipsoid_id, :, :], [0, 0, 1], figure_axes)
 
     # Plot the camera poses in black.
-    # for ind, pose_id in enumerate(range(Ms_t.shape[0] // 4)):
-    #     if visibility is None or visibility[ind]==1:
-    #         plot_camera(Ms_t[pose_id * 4 : pose_id * 4 + 4, :].transpose(), figure_axes)
+    for ind, pose_id in enumerate(range(Ms_t.shape[0] // 4)):
+        if visibility is None or visibility[ind]==1:
+            plot_camera(Ms_t[pose_id * 4 : pose_id * 4 + 4, :].transpose(), figure_axes)
 
     figure_axes.set_xlabel("X axis")
     figure_axes.set_ylabel("Y axis")

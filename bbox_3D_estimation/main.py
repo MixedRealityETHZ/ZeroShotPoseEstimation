@@ -11,10 +11,10 @@ from plotting import plot_3D_scene
 def read_list_poses(list):
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
-            orig_pose = np.loadtxt(f_input)
-            orig_pose = np.linalg.inv(orig_pose)
-            pose = np.transpose(orig_pose[:3, :])
-            #pose = np.transpose(np.loadtxt(f_input)[:3, :])
+            # orig_pose = np.loadtxt(f_input)
+            # orig_pose = np.linalg.inv(orig_pose)
+            # pose = np.transpose(orig_pose[:3, :])
+            pose = np.transpose(np.loadtxt(f_input)[:3, :])
             if idx == 0:
                 poses = pose
             else:
@@ -37,7 +37,7 @@ def read_list_box(list):
 ###########################################
 # Select the dataset to be used.
 # The name of the dataset defines the names of input and output directories.
-dataset = "tiger"
+dataset = "pikachubowl-1"
 
 # Select whether to save output images to files.
 save_output_images = True
@@ -47,7 +47,7 @@ random_downsample = False
 
 if dataset != "Aldoma":
     PATH = f"data/{dataset}"
-    box_list = sorted(glob.glob(os.path.join(os.getcwd(), f"{PATH}/bounding_boxes", "*.txt")))
+    box_list = sorted(glob.glob(os.path.join(os.getcwd(), f"{PATH}/bboxes", "*.txt")))
     poses_list = sorted(glob.glob(os.path.join(os.getcwd(), f"{PATH}/poses_ba", "*.txt")))
     intrinsics = f"{PATH}/intrinsics.txt"
     bbs = read_list_box(box_list)

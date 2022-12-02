@@ -257,31 +257,36 @@ def estimate_one_ellipsoid(Ps_t, Cs):
                                            # kept like this for consistency with the name used in the paper.
 
     # Compute the B matrices and stack them into M.
+    i = 0
     for index in range(n_views):
         # Get centre and axes of current ellipse.
-        [centre, axes, _] = dual_ellipse_to_parameters(Cs[3 * index:3 * index + 3, :])
+        try:
+            [centre, axes, _] = dual_ellipse_to_parameters(Cs[3 * index:3 * index + 3, :])
 
-        # Compute T, a transformation used to precondition the ellipse: centre the ellipse and scale the axes.
-        div_f = np.linalg.norm(axes)  # Distance of point (A,B) from origin.
-        T   = np.linalg.inv((np.vstack((np.hstack((np.eye(2)*div_f, centre)), np.array([0, 0, 1])))))
-        T_t = T.transpose()
+            # Compute T, a transformation used to precondition the ellipse: centre the ellipse and scale the axes.
+            div_f = np.linalg.norm(axes)  # Distance of point (A,B) from origin.
+            T   = np.linalg.inv((np.vstack((np.hstack((np.eye(2)*div_f, centre)), np.array([0, 0, 1])))))
+            T_t = T.transpose()
 
-        # Compute P_fr, applying T to the projection matrix.
-        P_fr = np.dot(Ps_t[4*index:4*index+4, :], T_t)
+            # Compute P_fr, applying T to the projection matrix.
+            P_fr = np.dot(Ps_t[4*index:4*index+4, :], T_t)
 
-        # Compute the coefficients for the linear system based on the current P_fr.
-        B = compute_B(P_fr)
+            # Compute the coefficients for the linear system based on the current P_fr.
+            B = compute_B(P_fr)
 
-        # Apply T to the ellipse.
-        C_t = np.dot(np.dot(T, Cs[3*index:3*index+3, :]), T_t)
+            # Apply T to the ellipse.
+            C_t = np.dot(np.dot(T, Cs[3*index:3*index+3, :]), T_t)
 
-        # Transform the ellipse to vector form.
-        C_tv = symmetric_mat_3_to_vector(C_t)
-        C_tv /= -C_tv[5]
+            # Transform the ellipse to vector form.
+            C_tv = symmetric_mat_3_to_vector(C_t)
+            C_tv /= -C_tv[5]
 
-        # Write the obtained coefficients to the correct slice of M.
-        M[6*index:6*index+6, 0:10] = B
-        M[6*index:6*index+6, 10+index] = -C_tv
+            # Write the obtained coefficients to the correct slice of M.
+            M[6*index:6*index+6, 0:10] = B
+            M[6*index:6*index+6, 10+index] = -C_tv
+        except:
+            i += 1
+            print(i)
 
     _, _, V = np.linalg.svd(M)
     w = V[-1, :]  # V is transposed respect to Matlab, so we take the last row.
