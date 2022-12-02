@@ -37,7 +37,7 @@ def read_list_box(list):
 ###########################################
 # Select the dataset to be used.
 # The name of the dataset defines the names of input and output directories.
-dataset = "pikachubowl-1"
+dataset = "tiger"
 
 # Select whether to save output images to files.
 save_output_images = True
