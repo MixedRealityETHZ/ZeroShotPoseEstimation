@@ -153,7 +153,7 @@ def inference_core(
     data_root,
     seq_dir,
     sfm_model_dir,
-    object_det_type="detection",
+    object_det_type="features",
     box_3D_detect_type="image_based",
     verbose=False
 ):
@@ -284,16 +284,17 @@ def inference_core(
                     K=K,
                     crop_size=512,
                 )
-                inp_crop = torchvision.transforms.functional.to_tensor(
-                    inp_crop
-                ).unsqueeze(0)
+                inp_crop = torchvision.transforms.functional.to_tensor(inp_crop).unsqueeze(0)
+                #inp_crop = torchvision.transforms.functional.to_tensor(inp_crop)
+
 
             # print(K_crop, inp_crop.shape)
             if verbose:
                 logger.info(f"feature matching runtime: {(time.time() - start)%60} seconds")
 
             # Detect query image(cropped) keypoints and extract descriptors:
-x            pred_detection = {k: v[0].cpu().numpy() for k, v in pred_detection.items()}
+            pred_detection = extractor_model(inp_crop)
+            pred_detection = {k: v[0].cpu().numpy() for k, v in pred_detection.items()}
 
             # 2D-3D matching by GATsSPG:
             inp_data = pack_data(
