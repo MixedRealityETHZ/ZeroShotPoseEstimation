@@ -6,6 +6,7 @@ from pathlib import Path
 import collections
 from matplotlib import pyplot as plt
 import itertools 
+from tqdm import tqdm
 import cv2
 
 class Detector3D():
@@ -55,7 +56,7 @@ class Detector3D():
 
 def predict_3D_bboxes(BboxPredictor, img_lists, poses_list, K, data_root, step=1):
     DetectorBox3D = Detector3D(K)
-    for id, img_path in enumerate(img_lists):
+    for id, img_path in enumerate(tqdm(img_lists)):
         if id%step==0 or id==0:
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)

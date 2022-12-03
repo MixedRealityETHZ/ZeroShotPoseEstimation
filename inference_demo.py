@@ -3,8 +3,7 @@ import torch
 import hydra
 from tqdm import tqdm
 import os
-import collections
-from pathlib import Path
+import cv2
 import time
 import os.path as osp
 import numpy as np
@@ -154,8 +153,9 @@ def inference_core(
     data_root,
     seq_dir,
     sfm_model_dir,
-    object_det_type="detection",
+    object_det_type="features",
     box_3D_detect_type="image_based",
+    verbose=False
 ):
 
     if cfg.use_tracking:
@@ -267,7 +267,6 @@ def inference_core(
         with torch.no_grad():
             img_path = data["path"][0]
             inp = data["image"].to(device)
-
             # Detect object:
             # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
             start = time.time()
@@ -276,7 +275,7 @@ def inference_core(
                     inp, img_path, K
                 )
             elif object_det_type == "detection":
-                image = inp.numpy()
+                image = cv2.imread(data["path"][0]) 
                 bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=K)
 
                 inp_crop, K_crop = local_feature_obj_detector.crop_img_by_bbox(
@@ -285,12 +284,13 @@ def inference_core(
                     K=K,
                     crop_size=512,
                 )
-                inp_crop = torchvision.transforms.functional.to_tensor(
-                    inp_crop
-                ).unsqueeze(0)
+                inp_crop = torchvision.transforms.functional.to_tensor(inp_crop).unsqueeze(0)
+                #inp_crop = torchvision.transforms.functional.to_tensor(inp_crop)
+
 
             # print(K_crop, inp_crop.shape)
-            logger.info(f"feature matching runtime: {(time.time() - start)%60} seconds")
+            if verbose:
+                logger.info(f"feature matching runtime: {(time.time() - start)%60} seconds")
 
             # Detect query image(cropped) keypoints and extract descriptors:
             pred_detection = extractor_model(inp_crop)
