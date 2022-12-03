@@ -4,32 +4,97 @@ import os
 import math
 from pathlib import Path
 import collections
+from matplotlib import pyplot as plt
+import itertools 
+import cv2
 
+class Detector3D():
+    def __init__(self, K) -> None:
+        self.K = K
+        self.bboxes = None
+        self.poses = None
+
+
+    def add_view(self, bbox_t: np.ndarray, pose_t: np.ndarray):
+        if self.bboxes is None:
+            self.bboxes = bbox_t
+        else:
+            self.bboxes = np.vstack((self.bboxes, bbox_t))
+        
+        if self.poses is None:
+            self.poses = pose_t
+        else:
+            self.poses = np.vstack((self.poses, pose_t))
+        
+
+    def detect_3D_box(self):
+        object_idx = 0
+        selected_frames = self.bboxes.shape[0]
+        self.visibility = np.ones((selected_frames,1))
+        estQs = compute_estimates(self.bboxes, self.K, self.poses, self.visibility)
+        centre, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[object_idx])
+
+        # Possible coordinates
+        mins = [-ax for (ax) in axes]
+        maxs = [ax for (ax) in axes]
+
+        # Coordinates of the points mins and maxs
+        points = np.array(list(itertools.product(*zip(mins, maxs))))
+
+        # Points in the camera frame
+        points = np.dot(points, R.T)
+
+        # Shift correctly the parralelepiped
+        points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
+        
+        self.points = points
+
+    def save_3D_box(self, data_root):
+        np.savetxt(data_root + '/box3d_corners.txt', self.points, delimiter=' ')
+
+
+def predict_3D_bboxes(BboxPredictor, img_lists, poses_list, K, data_root, step=1):
+    DetectorBox3D = Detector3D(K)
+    for id, img_path in enumerate(img_lists):
+        if id%step==0 or id==0:
+            image = cv2.imread(str(img_path))
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            print(f"\nprocessing id:{id}")
+            bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=K)
+            poses = read_list_poses([poses_list[id]])
+            DetectorBox3D.add_view(bbox_orig_res, poses)
+                
+    DetectorBox3D.detect_3D_box()
+    print(f"\nSaving... in {data_root}")
+    DetectorBox3D.save_3D_box(data_root)
+    print(f"\nSaved")
+
+    
 def sort_path_list(path_list):
     files = {int(Path(file).stem) : file for file in path_list}
     ordered_dict = collections.OrderedDict(sorted(files.items()))
     return list(ordered_dict.values())
 
+
 def read_list_poses(list):
-    poses = []
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
             pose = np.transpose(np.loadtxt(f_input)[:3, :])
-            
             if idx == 0:
                 poses = pose
             else:
-                poses = np.concatenate((pose, poses), axis=0)
-
+                poses = np.concatenate((poses, pose), axis=0)
     return poses
+
 
 def read_list_box(list):
     corpus = []
     for file_path in list:
         with open(file_path) as f_input:
             line = f_input.read()
-            corpus.append([int(number) for number in line.split(",")])
+            corpus.append([float(number) for number in line.split(",")])
     return np.array(corpus)
+
 
 def get_data(dataset, random_downsample):
     bbs = [] 
@@ -54,7 +119,6 @@ def get_data(dataset, random_downsample):
         Ms_t = Ms_t[random_indices, :]
         #print(Ms_t.shape)
         #print(bbs)
-
 
     visibility = np.ones((bbs.shape[0], 1))
 
@@ -257,31 +321,36 @@ def estimate_one_ellipsoid(Ps_t, Cs):
                                            # kept like this for consistency with the name used in the paper.
 
     # Compute the B matrices and stack them into M.
+    i = 0
     for index in range(n_views):
         # Get centre and axes of current ellipse.
-        [centre, axes, _] = dual_ellipse_to_parameters(Cs[3 * index:3 * index + 3, :])
+        try:
+            [centre, axes, _] = dual_ellipse_to_parameters(Cs[3 * index:3 * index + 3, :])
 
-        # Compute T, a transformation used to precondition the ellipse: centre the ellipse and scale the axes.
-        div_f = np.linalg.norm(axes)  # Distance of point (A,B) from origin.
-        T   = np.linalg.inv((np.vstack((np.hstack((np.eye(2)*div_f, centre)), np.array([0, 0, 1])))))
-        T_t = T.transpose()
+            # Compute T, a transformation used to precondition the ellipse: centre the ellipse and scale the axes.
+            div_f = np.linalg.norm(axes)  # Distance of point (A,B) from origin.
+            T   = np.linalg.inv((np.vstack((np.hstack((np.eye(2)*div_f, centre)), np.array([0, 0, 1])))))
+            T_t = T.transpose()
 
-        # Compute P_fr, applying T to the projection matrix.
-        P_fr = np.dot(Ps_t[4*index:4*index+4, :], T_t)
+            # Compute P_fr, applying T to the projection matrix.
+            P_fr = np.dot(Ps_t[4*index:4*index+4, :], T_t)
 
-        # Compute the coefficients for the linear system based on the current P_fr.
-        B = compute_B(P_fr)
+            # Compute the coefficients for the linear system based on the current P_fr.
+            B = compute_B(P_fr)
 
-        # Apply T to the ellipse.
-        C_t = np.dot(np.dot(T, Cs[3*index:3*index+3, :]), T_t)
+            # Apply T to the ellipse.
+            C_t = np.dot(np.dot(T, Cs[3*index:3*index+3, :]), T_t)
 
-        # Transform the ellipse to vector form.
-        C_tv = symmetric_mat_3_to_vector(C_t)
-        C_tv /= -C_tv[5]
+            # Transform the ellipse to vector form.
+            C_tv = symmetric_mat_3_to_vector(C_t)
+            C_tv /= -C_tv[5]
 
-        # Write the obtained coefficients to the correct slice of M.
-        M[6*index:6*index+6, 0:10] = B
-        M[6*index:6*index+6, 10+index] = -C_tv
+            # Write the obtained coefficients to the correct slice of M.
+            M[6*index:6*index+6, 0:10] = B
+            M[6*index:6*index+6, 10+index] = -C_tv
+        except:
+            i += 1
+            print(i)
 
     _, _, V = np.linalg.svd(M)
     w = V[-1, :]  # V is transposed respect to Matlab, so we take the last row.

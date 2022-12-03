@@ -3,32 +3,9 @@ from matplotlib import pyplot as plt
 import itertools 
 import glob
 import os
-from utils import get_data, compute_estimates, dual_quadric_to_ellipsoid_parameters
+from utils import compute_estimates, dual_quadric_to_ellipsoid_parameters, read_list_box, read_list_poses
 from plotting import plot_3D_scene
 
-
-# Utilities
-def read_list_poses(list):
-    for idx, file_path in enumerate(list):
-        with open(file_path) as f_input:
-            orig_pose = np.loadtxt(f_input)
-            orig_pose = np.linalg.inv(orig_pose)
-            pose = np.transpose(orig_pose[:3, :])
-            #pose = np.transpose(np.loadtxt(f_input)[:3, :])
-            if idx == 0:
-                poses = pose
-            else:
-                poses = np.concatenate((poses, pose), axis=0)
-    return poses
-
-
-def read_list_box(list):
-    corpus = []
-    for file_path in list:
-        with open(file_path) as f_input:
-            line = f_input.read()
-            corpus.append([float(number) for number in line.split(",")])
-    return np.array(corpus)
 
 
 ###########################################
@@ -47,7 +24,7 @@ random_downsample = False
 
 if dataset != "Aldoma":
     PATH = f"data/{dataset}"
-    box_list = sorted(glob.glob(os.path.join(os.getcwd(), f"{PATH}/bounding_boxes", "*.txt")))
+    box_list = sorted(glob.glob(os.path.join(os.getcwd(), f"{PATH}/bboxes", "*.txt")))
     poses_list = sorted(glob.glob(os.path.join(os.getcwd(), f"{PATH}/poses_ba", "*.txt")))
     intrinsics = f"{PATH}/intrinsics.txt"
     bbs = read_list_box(box_list)
@@ -62,26 +39,16 @@ if dataset != "Aldoma":
                 [0, float(intr[1]), float(intr[3])],
                 [0, 0, 1],
             ]
-        )
-        # K = np.array(
-        #     [
-        #         [float(1540), 0, float(719)],
-        #         [0, float(1540), float(963)],
-        #         [0, 0, 1],
-        #     ]
-        # )
-        
+        )        
 else:
     bbs = np.load('data/{:s}/bounding_boxes.npy'.format(dataset))  
     K = np.load('data/{:s}/intrinsics.npy'.format(dataset))
     Ms_t = np.load('data/{:s}/camera_poses.npy'.format(dataset)) 
     visibility = np.load('data/{:s}/visibility.npy'.format(dataset)) 
 
-
 if random_downsample:
     randomline = np.random.choice(bbs.shape[0], 100)
     visibility[randomline, :] = 1
-
 
 # Compute the number of frames and the number of objects
 # for the current dataset from the size of the visibility matrix.

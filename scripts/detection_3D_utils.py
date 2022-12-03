@@ -2,7 +2,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 import itertools 
 from .utils import compute_estimates, dual_quadric_to_ellipsoid_parameters
-from .plotting import plot_3D_scene
 
 class Detector3D():
     def __init__(self, K) -> None:
