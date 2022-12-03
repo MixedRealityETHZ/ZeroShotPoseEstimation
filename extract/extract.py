@@ -77,7 +77,7 @@ def _extract_eig(
     which_features: str = "k",
 ):
 
-    feats = data_dict[which_features].squeeze().cuda()
+    feats = data_dict[which_features].squeeze().cpu()
     feats = F.normalize(feats, p=2, dim=-1)
 
     # Get sizes
@@ -107,8 +107,8 @@ def _extract_eig(
     W_feat = W_feat.cpu().numpy()
 
     # Combine  # combination
-    D_feat = torch.Tensor(utils.get_diagonal(W_feat)).cuda()
-    W_tensor = torch.from_numpy(W_feat).cuda()
+    D_feat = torch.Tensor(utils.get_diagonal(W_feat)).cpu()
+    W_tensor = torch.from_numpy(W_feat).cpu()
     WD_diff = torch.Tensor(D_feat - W_tensor)
 
     # Extract eigenvectors

@@ -17,8 +17,8 @@ def main():
     extract_video = True
     plot = True
     save_bb = False
-    on_GPU = True
-    DATA = "/home/pippo809/git/MR/ZeroShotPoseEstimation/data/tiger"
+    on_GPU = False
+    DATA = "/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/tiger"
     video_path = f"{DATA}/Frames.mp4"
     images_folder = "/images"
     imlist_folder = "/lists"
@@ -62,7 +62,7 @@ def main():
     dataloader = DataLoader(dataset, batch_size=1)
 
     if on_GPU:
-        accelerator = Accelerator(mixed_precision="fp16", cpu=False)
+        accelerator = Accelerator(mixed_precision="fp16", cpu=True)
     else:
         accelerator = Accelerator(mixed_precision="no", cpu=True)
     model, dataloader = accelerator.prepare(model, dataloader)
