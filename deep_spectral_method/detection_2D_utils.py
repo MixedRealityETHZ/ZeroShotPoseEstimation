@@ -1,6 +1,6 @@
 from .extract import extract
 from .extract import extract_utils as utils
-import os
+import numpy as np
 import cv2
 
 # TODO: extend this class to load dino model on the constructor
@@ -16,11 +16,14 @@ class UnsupBbox():
         self.model, self.val_transform, self.patch_size, self.num_heads = utils.get_model(self.model_name)
 
     def downscale_image(self, image):
+        while image.shape[0]==1:
+            image=image.squeeze()
+        #image=image[...,np.newaxis]
         return cv2.resize(image, (0, 0), fx=self.downscale_factor, fy=self.downscale_factor)
 
     def infer_2d_bbox(self, image, K): 
         self.K = K   
-        image_half = self.downscale_image(image)
+        image_half = self.downscale_image(image)[...,np.newaxis]
         feature_dict = extract.extract_features(
             model=self.model,
             patch_size=self.patch_size,

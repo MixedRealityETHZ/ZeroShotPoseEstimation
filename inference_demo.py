@@ -18,9 +18,7 @@ from src.utils.bbox_3D_utils import compute_3dbbox_from_sfm
 from src.utils.model_io import load_network
 from src.local_feature_2D_detector import LocalFeatureObjectDetector
 from deep_spectral_method.detection_2D_utils import UnsupBbox
-from bbox_3D_estimation.utils import Detector3D
-from bbox_3D_estimation.utils import read_list_poses, sort_path_list
-from bbox_3D_estimation.bbox_3D_extraction import predict_3D_bboxes
+from bbox_3D_estimation.utils import Detector3D, read_list_poses, sort_path_list, predict_3D_bboxes
 from pytorch_lightning import seed_everything
 
 """Inference & visualize"""
@@ -194,16 +192,19 @@ def inference_core(
     K, _ = data_utils.get_K(paths["intrin_full_path"])
 
     sfm_ws_dir = paths["sfm_ws_dir"]
-    if box_3D_detect_type == "sfm_based":
+    anno_3d_box = data_root + "/box3d_corners.txt"
+
+    if box_3D_detect_type == "sfm_based" and not os.path.exists(anno_3d_box):
         bbox3d = compute_3dbbox_from_sfm(sfm_ws_dir=sfm_ws_dir, data_root=data_root)
-    else:
+
+    elif box_3D_detect_type == "image_based" and not os.path.exists(anno_3d_box):
         logger.info(
             f"3d bbox estimated with {box_3D_detect_type} method, reading from file"
         )
         segment_dir = data_root + "/test_moccona-annotate"
         intriscs_path = segment_dir + "/intrinsics.txt"
 
-        K, _ = data_utils.get_K(intriscs_path)
+        K_anno, _ = data_utils.get_K(intriscs_path)
         poses_list_anno = glob.glob(
             os.path.join(os.getcwd(), f"{segment_dir}/poses", "*.txt")
         )
@@ -213,8 +214,19 @@ def inference_core(
         )
         img_lists_anno = sort_path_list(img_lists_anno)
 
-        # TODO: fix 3d bbox estimation
-        predict_3D_bboxes(BboxPredictor, img_lists_anno, poses_list_anno, K)
+        predict_3D_bboxes(
+            BboxPredictor=BboxPredictor,
+            img_lists=img_lists_anno,
+            poses_list=poses_list_anno,
+            K=K_anno,
+            data_root=data_root,
+            step=10
+        )
+    
+    else:
+        logger.info(f"reading from file {anno_3d_box}")
+        
+    
 
     box3d_path = path_utils.get_3d_box_path(data_root)
 
@@ -264,7 +276,9 @@ def inference_core(
                     inp, img_path, K
                 )
             elif object_det_type == "detection":
-                bbox_orig_res = BboxPredictor.infer_2d_bbox(image_path=img_path, K=K)
+                image = inp.numpy()
+                bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=K)
+
                 inp_crop, K_crop = local_feature_obj_detector.crop_img_by_bbox(
                     query_img_path=img_path,
                     bbox=bbox_orig_res,

@@ -6,6 +6,7 @@ from pathlib import Path
 import collections
 from matplotlib import pyplot as plt
 import itertools 
+import cv2
 
 class Detector3D():
     def __init__(self, K) -> None:
@@ -51,6 +52,22 @@ class Detector3D():
     def save_3D_box(self, data_root):
         np.savetxt(data_root + '/box3d_corners.txt', self.points, delimiter=' ')
 
+
+def predict_3D_bboxes(BboxPredictor, img_lists, poses_list, K, data_root, step=1):
+    DetectorBox3D = Detector3D(K)
+    for id, img_path in enumerate(img_lists):
+        if id%step==0 or id==0:
+            image = cv2.imread(str(img_path))
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            print(f"\nprocessing id:{id}")
+            bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=K)
+            poses = read_list_poses([poses_list[id]])
+            DetectorBox3D.add_view(bbox_orig_res, poses)
+                
+    DetectorBox3D.detect_3D_box()
+    print(f"\nSaving... in {data_root}")
+    DetectorBox3D.save_3D_box(data_root)
+    print(f"\nSaved")
 
     
 def sort_path_list(path_list):
@@ -102,7 +119,6 @@ def get_data(dataset, random_downsample):
         Ms_t = Ms_t[random_indices, :]
         #print(Ms_t.shape)
         #print(bbs)
-
 
     visibility = np.ones((bbs.shape[0], 1))
 
