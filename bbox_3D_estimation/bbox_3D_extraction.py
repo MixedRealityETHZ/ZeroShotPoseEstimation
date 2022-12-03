@@ -10,14 +10,14 @@ import cv2
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from src.utils import data_utils
 from deep_spectral_method.detection_2D_utils import UnsupBbox
-from bbox_3D_estimation.detection_3D_utils import Detector3D
-from bbox_3D_estimation.utils import sort_path_list
-from bbox_3D_estimation.utils import read_list_poses
+from bbox_3D_estimation.utils import Detector3D
+from bbox_3D_estimation.utils import sort_path_list, read_list_poses
+from tqdm import tqdm
 
-def predict_3D_bboxes(BboxPredictor, img_lists, poses_list, K):
+def predict_3D_bboxes(BboxPredictor, img_lists, poses_list, K, step=1):
     DetectorBox3D = Detector3D(K)
     for id, img_path in enumerate(img_lists):
-        if id%50==0 or id==0:
+        if id%step==0 or id==0:
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             print(f"\nprocessing id:{id}")

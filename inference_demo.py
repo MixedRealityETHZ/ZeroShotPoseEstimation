@@ -18,9 +18,14 @@ from src.utils.bbox_3D_utils import compute_3dbbox_from_sfm
 from src.utils.model_io import load_network
 from src.local_feature_2D_detector import LocalFeatureObjectDetector
 from deep_spectral_method.detection_2D_utils import UnsupBbox
-from bbox_3D_estimation.detection_3D_utils import Detector3D
+from bbox_3D_estimation.utils import Detector3D
 from bbox_3D_estimation.utils import read_list_poses, sort_path_list
+from bbox_3D_estimation.bbox_3D_extraction import predict_3D_bboxes
 from pytorch_lightning import seed_everything
+
+"""Inference & visualize"""
+from src.datasets.normalized_dataset import NormalizedDataset
+from src.sfm.extract_features import confs
 
 seed_everything(12345)
 
@@ -146,10 +151,14 @@ def pack_data(avg_descriptors3d, clt_descriptors, keypoints3d, detection, image_
     return inp_data
 
 
-def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="detection", box_3D_detect_type="image_based"):
-    """Inference & visualize"""
-    from src.datasets.normalized_dataset import NormalizedDataset
-    from src.sfm.extract_features import confs
+def inference_core(
+    cfg,
+    data_root,
+    seq_dir,
+    sfm_model_dir,
+    object_det_type="detection",
+    box_3D_detect_type="image_based",
+):
 
     if cfg.use_tracking:
         from src.tracker.ba_tracker import BATracker
@@ -167,7 +176,9 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
         pass
     elif object_det_type == "detection":
         feature_dir = data_root + "/DSM_features"
-        BboxPredictor = UnsupBbox(feature_dir=feature_dir, downscale_factor=0.3, on_GPU=False)
+        BboxPredictor = UnsupBbox(
+            feature_dir=feature_dir, downscale_factor=0.3, on_GPU=False
+        )
 
     # Load models and prepare data:
     matching_model, extractor_model = load_model(cfg)
@@ -177,26 +188,33 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
     # sort images
     im_ids = [int(osp.basename(i).replace(".png", "")) for i in img_lists]
     im_ids.sort()
-    img_lists = [osp.join(osp.dirname(img_lists[0]), f"{im_id}.png") for im_id in im_ids]
+    img_lists = [
+        osp.join(osp.dirname(img_lists[0]), f"{im_id}.png") for im_id in im_ids
+    ]
     K, _ = data_utils.get_K(paths["intrin_full_path"])
 
     sfm_ws_dir = paths["sfm_ws_dir"]
-    if box_3D_detect_type=="sfm_based":
+    if box_3D_detect_type == "sfm_based":
         bbox3d = compute_3dbbox_from_sfm(sfm_ws_dir=sfm_ws_dir, data_root=data_root)
     else:
-        from bbox_3D_extraction import predict_3D_bboxes 
-        logger.info(f"3d bbox estimated with {box_3D_detect_type} method, reading from file")
+        logger.info(
+            f"3d bbox estimated with {box_3D_detect_type} method, reading from file"
+        )
         segment_dir = data_root + "/test_moccona-annotate"
         intriscs_path = segment_dir + "/intrinsics.txt"
 
         K, _ = data_utils.get_K(intriscs_path)
-        poses_list_anno = glob.glob(os.path.join(os.getcwd(), f"{segment_dir}/poses", "*.txt"))
+        poses_list_anno = glob.glob(
+            os.path.join(os.getcwd(), f"{segment_dir}/poses", "*.txt")
+        )
         poses_list_anno = sort_path_list(poses_list_anno)
-        img_lists_anno = glob.glob(os.path.join(os.getcwd(), f"{segment_dir}/color_full", "*.png"))
+        img_lists_anno = glob.glob(
+            os.path.join(os.getcwd(), f"{segment_dir}/color_full", "*.png")
+        )
         img_lists_anno = sort_path_list(img_lists_anno)
 
         # TODO: fix 3d bbox estimation
-        #predict_3D_bboxes(BboxPredictor, img_lists_anno, poses_list_anno, K)
+        predict_3D_bboxes(BboxPredictor, img_lists_anno, poses_list_anno, K)
 
     box3d_path = path_utils.get_3d_box_path(data_root)
 
@@ -228,7 +246,9 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
 
     pred_poses = {}  # {id:[pred_pose, inliers]}
 
-    dataset = NormalizedDataset(img_lists, confs[cfg.network.detection]["preprocessing"])
+    dataset = NormalizedDataset(
+        img_lists, confs[cfg.network.detection]["preprocessing"]
+    )
     loader = DataLoader(dataset, num_workers=1)
 
     for id, data in enumerate(tqdm(loader)):
@@ -240,7 +260,9 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
             # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
             start = time.time()
             if object_det_type == "features":
-                bbox, inp_crop, K_crop = local_feature_obj_detector.detect(inp, img_path, K)
+                bbox, inp_crop, K_crop = local_feature_obj_detector.detect(
+                    inp, img_path, K
+                )
             elif object_det_type == "detection":
                 bbox_orig_res = BboxPredictor.infer_2d_bbox(image_path=img_path, K=K)
                 inp_crop, K_crop = local_feature_obj_detector.crop_img_by_bbox(
@@ -249,7 +271,9 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir, object_det_type="dete
                     K=K,
                     crop_size=512,
                 )
-                inp_crop = torchvision.transforms.functional.to_tensor(inp_crop).unsqueeze(0)
+                inp_crop = torchvision.transforms.functional.to_tensor(
+                    inp_crop
+                ).unsqueeze(0)
 
             # print(K_crop, inp_crop.shape)
             logger.info(f"feature matching runtime: {(time.time() - start)%60} seconds")
