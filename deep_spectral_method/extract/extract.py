@@ -433,7 +433,6 @@ def extract_bboxes(
         --num_erode 2 --num_dilate 5 \
         --output_file "./data/VOC2012/multi_region_bboxes/fixed/bboxes_e2_d5.pth" \
     """
-    # utils.make_output_dir(str(Path(output_file).parent), check_if_empty=False)
     fn = partial(
         _extract_bbox,
         num_erode=num_erode,
@@ -446,11 +445,6 @@ def extract_bboxes(
     inputs = list([1, 2, 3])
     output = fn()
 
-    # inputs = utils.get_paired_input_files(features_dir, segmentations_dir)
-
-    # all_outputs = [fn(inp) for inp in tqdm(inputs, desc="Extracting bounding boxes")]
-    # torch.save(all_outputs, output_file)
-    # print("Done")
     return output
 
 

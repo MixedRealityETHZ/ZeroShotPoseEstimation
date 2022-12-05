@@ -26,7 +26,7 @@ def extract_images(video_path: str, images_root):
         curr_name = "/" + "0" * (name_len - len(name_str)) + name_str
 
         if remains:
-            name = images_root + curr_name + ".jpg"
+            name = images_root + curr_name + ".png"
             print("Creating..." + name)
             img_half = cv2.resize(
                 frame, (0, 0), fx=downscale_factor, fy=downscale_factor

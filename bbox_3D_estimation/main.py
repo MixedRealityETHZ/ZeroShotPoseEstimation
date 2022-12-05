@@ -29,10 +29,11 @@ if __name__ == "__main__":
     )
     img_lists = sort_path_list(img_lists)
 
-    predict_3D_bboxes(
+    bbox3d = predict_3D_bboxes(
         BboxPredictor=BboxPredictor,
         img_lists=img_lists,
         poses_list=poses_list,
         K=K,
         data_root=data_root,
+        step=1
     )

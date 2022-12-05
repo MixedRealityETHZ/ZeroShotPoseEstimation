@@ -35,7 +35,7 @@ class UnsupBbox():
 
         # Bounding boxes
         bbox = extract.extract_bboxes(feature_dict=feature_dict, segmap=segmap)
-        bbox_orig_res = bbox["bboxes_original_resolution"][0]
+        bbox_orig_res = [coord/self.downscale_factor for coord in bbox["bboxes_original_resolution"][0]]
         return bbox_orig_res
 
 

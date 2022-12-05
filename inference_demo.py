@@ -153,7 +153,7 @@ def inference_core(
     data_root,
     seq_dir,
     sfm_model_dir,
-    object_det_type="features",
+    object_det_type="previous_pose_detect",
     box_3D_detect_type="image_based",
     verbose=False
 ):
@@ -172,11 +172,11 @@ def inference_core(
 
     if object_det_type == "features":
         pass
-    elif object_det_type == "detection":
-        feature_dir = data_root + "/DSM_features"
-        BboxPredictor = UnsupBbox(
-            feature_dir=feature_dir, downscale_factor=0.3, on_GPU=False
-        )
+
+    feature_dir = data_root + "/DSM_features"
+    BboxPredictor = UnsupBbox(
+        feature_dir=feature_dir, downscale_factor=0.3, on_GPU=False
+    )
 
     # Load models and prepare data:
     matching_model, extractor_model = load_model(cfg)
@@ -201,7 +201,7 @@ def inference_core(
         logger.info(
             f"3d bbox estimated with {box_3D_detect_type} method, reading from file"
         )
-        segment_dir = data_root + "/test_moccona-annotate"
+        segment_dir = data_root + "/tiger-annotate"
         intriscs_path = segment_dir + "/intrinsics.txt"
 
         K_anno, _ = data_utils.get_K(intriscs_path)
@@ -214,21 +214,20 @@ def inference_core(
         )
         img_lists_anno = sort_path_list(img_lists_anno)
 
-        predict_3D_bboxes(
+        bbox3d = predict_3D_bboxes(
             BboxPredictor=BboxPredictor,
             img_lists=img_lists_anno,
             poses_list=poses_list_anno,
             K=K_anno,
             data_root=data_root,
-            step=10
+            step=1
         )
     
     else:
         logger.info(f"reading from file {anno_3d_box}")
-        
     
-
     box3d_path = path_utils.get_3d_box_path(data_root)
+    bbox3d = np.loadtxt(box3d_path)
 
     local_feature_obj_detector = LocalFeatureObjectDetector(
         extractor_model,
@@ -267,10 +266,11 @@ def inference_core(
         with torch.no_grad():
             img_path = data["path"][0]
             inp = data["image"].to(device)
+
             # Detect object:
             # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
             start = time.time()
-            if object_det_type == "features":
+            if object_det_type == "features" or id == 0:
                 bbox, inp_crop, K_crop = local_feature_obj_detector.detect(
                     inp, img_path, K
                 )
@@ -285,10 +285,12 @@ def inference_core(
                     crop_size=512,
                 )
                 inp_crop = torchvision.transforms.functional.to_tensor(inp_crop).unsqueeze(0)
-                #inp_crop = torchvision.transforms.functional.to_tensor(inp_crop)
+            else:
+                previous_frame_pose, inliers = pred_poses[id - 1]
+                _, inp_crop, K_crop, = local_feature_obj_detector.previous_pose_detect(
+                    img_path, K, previous_frame_pose, bbox3d
+                )
 
-
-            # print(K_crop, inp_crop.shape)
             if verbose:
                 logger.info(f"feature matching runtime: {(time.time() - start)%60} seconds")
 
@@ -317,64 +319,12 @@ def inference_core(
             )
 
             # Estimate object pose by 2D-3D correspondences:
-            pose_pred, pose_pred_homo, inliers = eval_utils.ransac_PnP(
+            pose_pred, pose_opt, inliers = eval_utils.ransac_PnP(
                 K_crop, mkpts2d, mkpts3d, scale=1000
             )
 
             # Store previous estimated poses:
             pred_poses[id] = [pose_pred, inliers]
-            image_crop = np.asarray(
-                (inp_crop * 255).squeeze().cpu().numpy(), dtype=np.uint8
-            )
-
-        if cfg.use_tracking:
-            frame_dict = {
-                "im_path": image_crop,
-                "kpt_pred": pred_detection,
-                "pose_pred": pose_pred_homo,
-                "pose_gt": pose_pred_homo,
-                "K": K_crop,
-                "K_crop": K_crop,
-                "data": data,
-            }
-
-            use_update = id % track_interval == 0
-            if use_update:
-                mkpts3d_db_inlier = mkpts3d[inliers.flatten()]
-                mkpts2d_q_inlier = mkpts2d[inliers.flatten()]
-
-                n_kpt = kpts2d.shape[0]
-
-                valid_query_id = np.where(valid != False)[0][inliers.flatten()]
-                kpts3d_full = np.ones([n_kpt, 3]) * 10086
-                kpts3d_full[valid_query_id] = mkpts3d_db_inlier
-                kpt3d_ids = matches[valid][inliers.flatten()]
-
-                kf_dict = {
-                    "im_path": image_crop,
-                    "kpt_pred": pred_detection,
-                    "valid_mask": valid,
-                    "mkpts2d": mkpts2d_q_inlier,
-                    "mkpts3d": mkpts3d_db_inlier,
-                    "kpt3d_full": kpts3d_full,
-                    "inliers": inliers,
-                    "kpt3d_ids": kpt3d_ids,
-                    "valid_query_id": valid_query_id,
-                    "pose_pred": pose_pred_homo,
-                    "pose_gt": pose_pred_homo,
-                    "K": K_crop,
-                }
-
-                need_update = not tracker.update_kf(kf_dict)
-
-            if id == 0:
-                tracker.add_kf(kf_dict)
-                id += 1
-                pose_opt = pose_pred_homo
-            else:
-                pose_init, pose_opt, ba_log = tracker.track(frame_dict, auto_mode=False)
-        else:
-            pose_opt = pose_pred_homo
 
         # Visualize:
         vis_utils.save_demo_image(

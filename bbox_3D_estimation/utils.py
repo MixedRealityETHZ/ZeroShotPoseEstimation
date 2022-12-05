@@ -26,7 +26,12 @@ class Detector3D():
             self.poses = pose_t
         else:
             self.poses = np.vstack((self.poses, pose_t))
-        
+    
+    def get_2d_bboxes(self):
+        return  self.bboxes
+    
+    def get_poses(self):
+        return self.poses
 
     def detect_3D_box(self):
         object_idx = 0
@@ -50,26 +55,35 @@ class Detector3D():
         
         self.points = points
 
+        return self.points
+
     def save_3D_box(self, data_root):
         np.savetxt(data_root + '/box3d_corners.txt', self.points, delimiter=' ')
 
 
-def predict_3D_bboxes(BboxPredictor, img_lists, poses_list, K, data_root, step=1):
+def predict_3D_bboxes(BboxPredictor, img_lists, poses_list, K, data_root, step=1, save_2d_bboxes=False):
     DetectorBox3D = Detector3D(K)
+    all_2d_bboxes = None
     for id, img_path in enumerate(tqdm(img_lists)):
         if id%step==0 or id==0:
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            print(f"\nprocessing id:{id}")
             bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=K)
             poses = read_list_poses([poses_list[id]])
-            DetectorBox3D.add_view(bbox_orig_res, poses)
-                
-    DetectorBox3D.detect_3D_box()
-    print(f"\nSaving... in {data_root}")
-    DetectorBox3D.save_3D_box(data_root)
-    print(f"\nSaved")
+            DetectorBox3D.add_view(bbox_orig_res, poses) 
+            if save_2d_bboxes and all_2d_bboxes is None:
+                all_2d_bboxes = bbox_orig_res
+            elif save_2d_bboxes and all_2d_bboxes is not None:
+                all_2d_bboxes = np.vstack((all_2d_bboxes, bbox_orig_res))
 
+    if save_2d_bboxes:
+        bbox2d_path = data_root + '/box2d_corners.txt'
+        np.savetxt(bbox2d_path, all_2d_bboxes, delimiter=' ')
+        print(f"saving 2d bboxes on file {bbox2d_path}")
+
+    bbox3d = DetectorBox3D.detect_3D_box()
+    DetectorBox3D.save_3D_box(data_root)
+    return bbox3d
     
 def sort_path_list(path_list):
     files = {int(Path(file).stem) : file for file in path_list}

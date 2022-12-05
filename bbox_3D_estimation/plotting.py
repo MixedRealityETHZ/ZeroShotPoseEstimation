@@ -186,7 +186,7 @@ def plot_camera(M, figure_axes):
     figure_axes.scatter(t[0], t[1], t[2])
 
 
-def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, points, GT_points, visibility=None):
+def plot_3D_scene(Ms_t, points, GT_points, visibility=None):
     """Plot """
     fig = plt.figure(figsize=(8, 8))  # Open a new figure.
     figure_axes = fig.add_subplot(111, projection="3d")
@@ -251,9 +251,9 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, points, GT_poi
 
     fig.show()
 
-    if save_output_images:
-        output_path = "Output/{:s}/".format(dataset)
-        # Create output directory, in case it does not exist already.
-        Path(output_path).mkdir(parents=True, exist_ok=True)
-        plt.savefig('{:s}/ellipsoids.png'.format(output_path), pad_inches=0.0)
+    # if save_output_images:
+    #     output_path = "Output/{:s}/".format(dataset)
+    #     # Create output directory, in case it does not exist already.
+    #     Path(output_path).mkdir(parents=True, exist_ok=True)
+    #     plt.savefig('{:s}/ellipsoids.png'.format(output_path), pad_inches=0.0)
     return fig
