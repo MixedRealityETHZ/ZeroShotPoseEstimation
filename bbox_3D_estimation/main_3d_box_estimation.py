@@ -29,6 +29,9 @@ if dataset != "Aldoma":
     intrinsics = f"{PATH}/intrinsics.txt"
     if len(box_list) > 1:
         bbs = read_list_box(box_list)
+    else:
+        bbs = np.loadtxt(box_list[0])
+
     Ms_t = read_list_poses(poses_list)
     GT_bb = np.loadtxt(f"{PATH}/box3d_corners.txt")
     with open(intrinsics) as f:
@@ -40,13 +43,8 @@ if dataset != "Aldoma":
                 [0, 0, 1],
             ]
         )  
-    # bbs = None
-    # with open(box_list[0]) as f:
-    #     intr = f.read()
-    #     lines = [line for line in intr.split("\n")]
 
     visibility = np.ones((bbs.shape[0], 1))
-        #bbs = np.vstack(())
     
 else:
     bbs = np.load('data/{:s}/bounding_boxes.npy'.format(dataset))  
@@ -99,14 +97,21 @@ points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
 
 # Plot ellipsoids and camera poses in 3D.
 plot = True
-if plot:
-    plot_3D_scene(
-        estQs=estQs,
-        gtQs=estQs,
-        Ms_t=Ms_t,
-        dataset=dataset,
-        save_output_images=save_output_images,
-        points=points,
-        GT_points=GT_bb        
+# if plot:
+#     plot_3D_scene(
+#         estQs=estQs,
+#         gtQs=estQs,
+#         Ms_t=Ms_t,
+#         dataset=dataset,
+#         save_output_images=save_output_images,
+#         points=points,
+#         GT_points=GT_bb        
+#     )
+
+plot_3D_scene(
+    Ms_t = Ms_t, 
+    points = points, 
+    GT_points = None
     )
-    plt.show()
+
+plt.show()
