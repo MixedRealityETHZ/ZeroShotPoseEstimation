@@ -15,11 +15,20 @@ import matplotlib.patches as mpatches
 import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 
-from .lfd import (
-    dual_ellipse_to_parameters,
-    project_ellipsoids,
-    dual_quadric_to_ellipsoid_parameters,
-)
+try:
+    from .lfd import (
+        dual_ellipse_to_parameters,
+        project_ellipsoids,
+        dual_quadric_to_ellipsoid_parameters,
+    )
+except:
+    from lfd import (
+        dual_ellipse_to_parameters,
+        project_ellipsoids,
+        dual_quadric_to_ellipsoid_parameters,
+    )
+
+
 
 
 def plot_ellipse(C, colour):

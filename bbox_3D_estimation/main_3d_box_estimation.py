@@ -24,13 +24,13 @@ random_downsample = False
 
 if dataset != "Aldoma":
     PATH = f"data/{dataset}"
-    box_list = sorted(glob.glob(os.path.join(os.getcwd(), f"{PATH}/bboxes", "*.txt")))
+    box_list = sorted(glob.glob(os.path.join(os.getcwd(), f"{PATH}/bboxes.txt")))
     poses_list = sorted(glob.glob(os.path.join(os.getcwd(), f"{PATH}/poses_ba", "*.txt")))
     intrinsics = f"{PATH}/intrinsics.txt"
-    bbs = read_list_box(box_list)
+    if len(box_list) > 1:
+        bbs = read_list_box(box_list)
     Ms_t = read_list_poses(poses_list)
     GT_bb = np.loadtxt(f"{PATH}/box3d_corners.txt")
-    visibility = np.ones((bbs.shape[0], 1))
     with open(intrinsics) as f:
         intr = f.readlines()
         K = np.array(
@@ -39,7 +39,15 @@ if dataset != "Aldoma":
                 [0, float(intr[1]), float(intr[3])],
                 [0, 0, 1],
             ]
-        )        
+        )  
+    # bbs = None
+    # with open(box_list[0]) as f:
+    #     intr = f.read()
+    #     lines = [line for line in intr.split("\n")]
+
+    visibility = np.ones((bbs.shape[0], 1))
+        #bbs = np.vstack(())
+    
 else:
     bbs = np.load('data/{:s}/bounding_boxes.npy'.format(dataset))  
     K = np.load('data/{:s}/intrinsics.npy'.format(dataset))
