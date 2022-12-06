@@ -166,11 +166,7 @@ def inference_core(
     verbose=False,
 ):
 
-    logger.info("Running OnePose inference without tracking")
-
     BboxPredictor = UnsupBbox(downscale_factor=0.3, on_GPU=compute_on_GPU)
-    if object_det_type == "detection":
-        feature_dir = data_root + "/DSM_features"
 
     # Load models and prepare data:
     matching_model, extractor_model = load_model(cfg)
@@ -188,23 +184,20 @@ def inference_core(
     sfm_ws_dir = paths["sfm_ws_dir"]
     anno_3d_box = data_root + "/box3d_corners.txt"
 
-    if box_3D_detect_type == "sfm_based" and not os.path.exists(anno_3d_box):
-        bbox3d = compute_3dbbox_from_sfm(sfm_ws_dir=sfm_ws_dir, data_root=data_root)
-
-    elif box_3D_detect_type == "image_based" or not os.path.exists(anno_3d_box):
+    if box_3D_detect_type == "image_based" or not os.path.exists(anno_3d_box):
         logger.info(
             f"3d bbox estimated with {box_3D_detect_type} method, reading from file"
         )
-        segment_dir = data_root + "/tiger-2"
-        intriscs_path = segment_dir + "/intrinsics.txt"
+
+        intriscs_path = seq_dir + "/intrinsics.txt"
 
         K_anno, _ = data_utils.get_K(intriscs_path)
         poses_list_anno = glob.glob(
-            os.path.join(os.getcwd(), f"{segment_dir}/poses", "*.txt")
+            os.path.join(os.getcwd(), f"{seq_dir}/poses", "*.txt")
         )
         poses_list_anno = sort_path_list(poses_list_anno)
         img_lists_anno = glob.glob(
-            os.path.join(os.getcwd(), f"{segment_dir}/color_full", "*.png")
+            os.path.join(os.getcwd(), f"{seq_dir}/color_full", "*.png")
         )
         img_lists_anno = sort_path_list(img_lists_anno)
 
@@ -287,9 +280,7 @@ def inference_core(
                     inp_crop
                 ).unsqueeze(0)
                 inp_crop = inp_crop.to(device)
-                # inp_crop = torchvision.transforms.functional.to_tensor(inp_crop)
 
-            # print(K_crop, inp_crop.shape)
             if verbose:
                 logger.info(
                     f"feature matching runtime: {(time.time() - start)%60} seconds"
@@ -320,14 +311,8 @@ def inference_core(
             )
 
             # Estimate object pose by 2D-3D correspondences:
-            pose_pred, pose_pred_homo, inliers = eval_utils.ransac_PnP(
+            _, pose_pred_homo, inliers = eval_utils.ransac_PnP(
                 K_crop, mkpts2d, mkpts3d, scale=1000
-            )
-
-            # Store previous estimated poses:
-            pred_poses[id] = [pose_pred, inliers]
-            image_crop = np.asarray(
-                (inp_crop * 255).squeeze().cpu().numpy(), dtype=np.uint8
             )
 
         pose_opt = pose_pred_homo
