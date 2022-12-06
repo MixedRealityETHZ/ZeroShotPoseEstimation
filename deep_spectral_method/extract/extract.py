@@ -25,6 +25,7 @@ def extract_features(
     patch_size: int,
     num_heads: int,
     images,
+    on_GPU,
 ):
 
     """
@@ -51,12 +52,17 @@ def extract_features(
 
     # Reshape image
     P = patch_size
-    images = torch.from_numpy(images.transpose((-1,0,1))[np.newaxis,...]).type(torch.float)
+    # images = torch.from_numpy(images.transpose((-1, 0, 1))[np.newaxis, ...]).type(
+    #     torch.float
+    # )
     B, C, H, W = images.shape
     H_patch, W_patch = H // P, W // P
     H_pad, W_pad = H_patch * P, W_patch * P
     T = H_patch * W_patch + 1  # number of tokens, add 1 for [CLS]
     images = images[:, :, :H_pad, :W_pad]
+
+    if on_GPU:
+        images = images.cuda()
 
     model.get_intermediate_layers(images)[0].squeeze(0)
     output_qkv = (
@@ -67,8 +73,8 @@ def extract_features(
     output_dict["k"] = output_qkv[1].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
 
     # Metadata
-    #output_dict["indices"] = indices[0]
-    #output_dict["file"] = files[0]
+    # output_dict["indices"] = indices[0]
+    # output_dict["file"] = files[0]
     output_dict["patch_size"] = patch_size
     output_dict["shape"] = images.shape
     output_dict = {
