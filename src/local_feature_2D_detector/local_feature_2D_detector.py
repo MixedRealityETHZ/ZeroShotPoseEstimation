@@ -7,8 +7,6 @@ from src.utils.colmap.read_write_model import read_model
 from src.utils.data_utils import get_K_crop_resize, get_image_crop_resize
 from src.utils.vis_utils import reproj
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
 
 def pack_extract_data(img_path):
     image = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
@@ -17,7 +15,7 @@ def pack_extract_data(img_path):
     return torch.Tensor(image)
 
 
-def pack_match_data(db_detection, query_detection, db_size, query_size, device=device):
+def pack_match_data(db_detection, query_detection, db_size, query_size, device):
     data = {}
     for k in db_detection.keys():
         data[k + "0"] = db_detection[k].__array__()
@@ -81,7 +79,9 @@ class LocalFeatureObjectDetector:
             db_shape = db["size"]
             query_shape = query["size"]
 
-            match_data = pack_match_data(db, query, db["size"], query["size"])
+            match_data = pack_match_data(
+                db, query, db["size"], query["size"], device=self.device
+            )
             match_pred = self.matcher(match_data)
             matches = match_pred["matches0"][0].detach().cpu().numpy()
             confs = match_pred["matching_scores0"][0].detach().cpu().numpy()
