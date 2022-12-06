@@ -309,6 +309,7 @@ def _extract_single_region_segmentations(
     threshold: float,
     feature_dict: dict,
     eigs_dict: dict,
+    adaptive_threshold=True,
 ):
     # index, (feature_path, eigs_path) = inp
 
@@ -334,6 +335,8 @@ def _extract_single_region_segmentations(
     eigenvector = data_dict["eigenvectors"][
         1
     ].numpy()  # take smallest non-zero eigenvector
+    if adaptive_threshold:
+        threshold = max(eigenvector) / 5
     segmap = (eigenvector > threshold).reshape(H_patch, W_patch)
 
     # Save dict
