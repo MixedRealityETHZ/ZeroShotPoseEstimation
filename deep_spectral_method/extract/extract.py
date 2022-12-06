@@ -2,6 +2,7 @@ from functools import partial
 from pathlib import Path
 from typing import Optional, Tuple
 
+import io
 import cv2
 import fire
 import numpy as np
@@ -11,6 +12,7 @@ from PIL import Image
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.decomposition import PCA
 from torchvision.utils import draw_bounding_boxes
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 from accelerate import Accelerator
 from scipy.sparse.linalg import eigsh
@@ -86,10 +88,7 @@ def extract_features(
 
 
 def _extract_eig(
-    K: int,
-    data_dict: dict,
-    on_gpu: bool = False,
-    which_features: str = "k",
+    K: int, data_dict: dict, on_gpu: bool = False, which_features: str = "k", viz=False
 ):
     if on_gpu:
         device = "cuda"
@@ -152,6 +151,15 @@ def _extract_eig(
             eigenvectors[k] = 0 - eigenvectors[k]
 
     # # Save dict
+    if viz:
+        vis_eigenvectors(
+            eigenvectors=eigenvectors,
+            H_patch=H_patch,
+            W_patch=W_patch,
+            H_pad=H_pad,
+            W_pad=W_pad,
+            K=K,
+        )
 
     eig_dict = {"eigenvalues": eigenvalues, "eigenvectors": eigenvectors}
 
@@ -867,6 +875,19 @@ def vis_segmentations(
         # Display
         for d, col in zip(cols, st.columns(len(cols))):
             col.image(**d)
+
+
+def vis_eigenvectors(eigenvectors, H_patch, W_patch, H_pad, W_pad, K):
+    # eigenvectors_upscaled = []
+    eigenvector = eigenvectors[1].reshape(
+        1, 1, H_patch, W_patch
+    )  # .reshape(1, 1, H_pad, W_pad)
+    eigenvector: torch.Tensor = F.interpolate(
+        eigenvector, size=(H_pad, W_pad), mode="bilinear", align_corners=False
+    )  # slightly off, but for visualizations this is okay
+    fig = plt.figure(num=1)
+    plt.clf()
+    plt.imshow(eigenvector.squeeze().numpy())
 
 
 if __name__ == "__main__":

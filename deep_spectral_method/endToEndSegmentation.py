@@ -15,10 +15,13 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def main():
-    extract_video = False
+    extract_video = True
     plot = True
-    on_GPU = True
-    PATH = os.getcwd() + "/data/onepose_datasets/val_data/0606-tiger-others/tiger-2"
+    on_GPU = True if device == "cuda" else False
+    PATH = (
+        os.getcwd()
+        + "/data/onepose_datasets/val_data/0620-dinosaurcup-bottle/dinosaurcup-4"
+    )
     video_path = f"{PATH}/Frames.m4v"
     images_root = f"{PATH}/extracted_images"
     imlist_root = f"{PATH}/lists"
@@ -70,6 +73,8 @@ def main():
             # Bounding boxes
             limits = bbox["bboxes_original_resolution"][0]
             image_PIL = Image.open(images_root + "/" + filenames[k])
+            fig = plt.figure(num=42)
+            plt.clf()
             plt.imshow(image_PIL, alpha=0.9)
             plt.gca().add_patch(
                 Rectangle(
@@ -83,7 +88,6 @@ def main():
             )
             plt.show(block=False)
             plt.pause(0.0001)
-            plt.clf()
 
 
 def extract_bbox(model, patch_size, num_heads, images, on_GPU):
@@ -95,7 +99,9 @@ def extract_bbox(model, patch_size, num_heads, images, on_GPU):
         on_GPU=on_GPU,
     )
 
-    eigs_dict = extract._extract_eig(K=4, data_dict=feature_dict, on_gpu=on_GPU)
+    eigs_dict = extract._extract_eig(
+        K=8, data_dict=feature_dict, on_gpu=on_GPU, viz=True
+    )
 
     # Segmentation
     segmap = extract.extract_single_region_segmentations(
