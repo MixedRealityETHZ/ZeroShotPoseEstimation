@@ -13,7 +13,6 @@ class UnsupBbox:
         self.num_workers = 0  # decrease this if out_of_memory error
         self.downscale_factor = downscale_factor
         self.on_GPU = on_GPU
-        self.transform = utils.get_transform("dino")
         (
             self.model,
             self.val_transform,
@@ -32,7 +31,7 @@ class UnsupBbox:
     def infer_2d_bbox(self, image, K):
         self.K = K
         image_half = self.downscale_image(image)
-        image_half = self.transform(image_half)
+        image_half = self.val_transform(image_half)
         c, h, w = image_half.shape
         image_half = image_half.reshape((1, c, h, w))
         feature_dict = extract.extract_features(
