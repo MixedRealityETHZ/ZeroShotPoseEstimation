@@ -245,8 +245,6 @@ def inference_core(
         clt_data["descriptors3d"], clt_data["scores3d"], idxs, num_3d, num_leaf
     )
 
-    pred_poses = {}  # {id:[pred_pose, inliers]}
-
     dataset = NormalizedDataset(
         img_lists, confs[cfg.network.detection]["preprocessing"]
     )
@@ -323,7 +321,7 @@ def inference_core(
             K,
             image_path=img_path,
             box3d_path=box3d_path,
-            draw_box=len(inliers) > 6,
+            draw_box=len(inliers) > 3,
             save_path=osp.join(paths["vis_box_dir"], f"{id}.jpg"),
         )
 
