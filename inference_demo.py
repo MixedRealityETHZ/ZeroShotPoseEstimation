@@ -13,13 +13,10 @@ import torchvision
 from loguru import logger
 from torch.utils.data import DataLoader
 from src.utils import data_utils, path_utils, eval_utils, vis_utils
-from src.utils.bbox_3D_utils import compute_3dbbox_from_sfm
 from src.utils.model_io import load_network
 from src.local_feature_2D_detector import LocalFeatureObjectDetector
-from deep_spectral_method.detection_2D_utils import UnsupBbox
-from bbox_3D_estimation.utils import (
-    Detector3D,
-    read_list_poses,
+from src.deep_spectral_method.detection_2D_utils import UnsupBbox
+from src.bbox_3D_estimation.utils import (
     sort_path_list,
     predict_3D_bboxes,
 )
@@ -161,8 +158,7 @@ def inference_core(
     data_root,
     seq_dir,
     sfm_model_dir,
-    object_det_type="detection",
-    box_3D_detect_type="image_based",
+    object_det_type="other",
     verbose=False,
 ):
 
@@ -184,39 +180,12 @@ def inference_core(
     sfm_ws_dir = paths["sfm_ws_dir"]
     anno_3d_box = data_root + "/box3d_corners.txt"
 
-    if box_3D_detect_type == "image_based" or not os.path.exists(anno_3d_box):
-        logger.info(
-            f"3d bbox estimated with {box_3D_detect_type} method, reading from file"
-        )
-
-        intriscs_path = seq_dir + "/intrinsics.txt"
-
-        K_anno, _ = data_utils.get_K(intriscs_path)
-        poses_list_anno = glob.glob(
-            os.path.join(os.getcwd(), f"{seq_dir}/poses", "*.txt")
-        )
-        poses_list_anno = sort_path_list(poses_list_anno)
-        img_lists_anno = glob.glob(
-            os.path.join(os.getcwd(), f"{seq_dir}/color_full", "*.png")
-        )
-        img_lists_anno = sort_path_list(img_lists_anno)
-
-        predict_3D_bboxes(
-            BboxPredictor=BboxPredictor,
-            img_lists=img_lists_anno,
-            poses_list=poses_list_anno,
-            K=K_anno,
-            data_root=data_root,
-            step=10,
-        )
-
-        logger.info(f"built from file {anno_3d_box}")
-        print("done")
-
+    if not os.path.exists(anno_3d_box):
+        logger.error(f"No precomputed 3d bounding boxes in: {anno_3d_box}")
     else:
         logger.info(f"reading from file {anno_3d_box}")
-
-    box3d_path = path_utils.get_3d_box_path(data_root, annotated=False)
+        box3d_path = path_utils.get_3d_box_path(data_root, annotated=False)
+        box3d = np.loadtxt(box3d_path)
 
     local_feature_obj_detector = LocalFeatureObjectDetector(
         extractor_model,
@@ -245,6 +214,8 @@ def inference_core(
         clt_data["descriptors3d"], clt_data["scores3d"], idxs, num_3d, num_leaf
     )
 
+    pred_poses = {}  # {id:[pred_pose, inliers]}
+
     dataset = NormalizedDataset(
         img_lists, confs[cfg.network.detection]["preprocessing"]
     )
@@ -257,7 +228,7 @@ def inference_core(
             # Detect object:
             # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
             start = time.time()
-            if object_det_type == "features":
+            if object_det_type == "features" or id == 0:
                 bbox, inp_crop, K_crop = local_feature_obj_detector.detect(
                     inp,
                     img_path,
@@ -278,6 +249,11 @@ def inference_core(
                     inp_crop
                 ).unsqueeze(0)
                 inp_crop = inp_crop.to(device)
+            else:
+                previous_frame_pose, inliers = pred_poses[id - 1]
+                _, inp_crop, K_crop, = local_feature_obj_detector.previous_pose_detect(
+                    img_path, K, previous_frame_pose, box3d
+                )
 
             if verbose:
                 logger.info(
@@ -302,26 +278,27 @@ def inference_core(
             kpts2d = pred_detection["keypoints"]
             kpts3d = inp_data["keypoints3d"][0].detach().cpu().numpy()
             confidence = pred["matching_scores0"].detach().cpu().numpy()
-            mkpts2d, mkpts3d, mconf = (
+            mkpts2d, mkpts3d, _ = (
                 kpts2d[valid],
                 kpts3d[matches[valid]],
                 confidence[valid],
             )
 
             # Estimate object pose by 2D-3D correspondences:
-            _, pose_pred_homo, inliers = eval_utils.ransac_PnP(
+            pose_pred, pose_pred_homo, inliers = eval_utils.ransac_PnP(
                 K_crop, mkpts2d, mkpts3d, scale=1000
             )
 
-        pose_opt = pose_pred_homo
+            # Store previous estimated poses:
+            pred_poses[id] = [pose_pred, inliers]
 
         # Visualize:
         vis_utils.save_demo_image(
-            pose_opt,
+            pose_pred_homo,
             K,
             image_path=img_path,
             box3d_path=box3d_path,
-            draw_box=len(inliers) > 3,
+            draw_box=len(inliers) > 0,
             save_path=osp.join(paths["vis_box_dir"], f"{id}.jpg"),
         )
 

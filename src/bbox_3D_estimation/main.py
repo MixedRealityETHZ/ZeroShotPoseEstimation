@@ -30,8 +30,8 @@ if __name__ == "__main__":
 
     predict_3D_bboxes(
         BboxPredictor=BboxPredictor,
-        img_lists=img_lists,
-        poses_list=poses_list,
-        K=K,
+        full_res_img_paths=img_lists,
+        poses_paths=poses_list,
+        intrisics_path=K,
         data_root=data_root,
     )

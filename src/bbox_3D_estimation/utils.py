@@ -8,6 +8,8 @@ from matplotlib import pyplot as plt
 import itertools
 from tqdm import tqdm
 import cv2
+from src.deep_spectral_method.detection_2D_utils import UnsupBbox
+from src.utils import data_utils
 
 
 class Detector3D:
@@ -45,10 +47,7 @@ class Detector3D:
         points = np.dot(points, R.T)
 
         # Shift correctly the parralelepiped
-        points[:, 0:3] = np.add(
-            centre[None, :],
-            points[:, :3],
-        )
+        points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
 
         self.points = points
 
@@ -57,21 +56,31 @@ class Detector3D:
         np.savetxt(data_root + "/box3d_corners.txt", self.points, delimiter=" ")
 
 
-def predict_3D_bboxes(BboxPredictor, img_lists, poses_list, K, data_root, step=1):
-    DetectorBox3D = Detector3D(K)
-    for id, img_path in enumerate(tqdm(img_lists)):
+def predict_3D_bboxes(
+    full_res_img_paths,
+    intrisics_path,
+    poses_paths,
+    data_root,
+    step=1,
+    downscale_factor=0.3,
+    compute_on_GPU=False,
+):  
+    _K, _ = data_utils.get_K(intrisics_path) 
+
+    DetectorBox3D = Detector3D(_K)
+    BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, on_GPU=compute_on_GPU)
+
+    for id, img_path in enumerate(tqdm(full_res_img_paths)):
         if id % step == 0 or id == 0:
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            print(f"\nprocessing id:{id}")
-            bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=K)
-            poses = read_list_poses([poses_list[id]])
+            poses = read_list_poses([poses_paths[id]])
+            
+            bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
             DetectorBox3D.add_view(bbox_orig_res, poses)
 
     DetectorBox3D.detect_3D_box()
-    print(f"\nSaving... in {data_root}")
     DetectorBox3D.save_3D_box(data_root)
-    print(f"\nSaved")
 
 
 def sort_path_list(path_list):
@@ -192,7 +201,7 @@ def fit_one_ellipse_in_bb(bb):
     height = abs(bb[3] - bb[1]) / 2  # Height of the bounding box.
     Ccn = np.vstack(
         (
-            np.hstack((np.diag((1 / width**2, 1 / height**2)), np.zeros((2, 1)))),
+            np.hstack((np.diag((1 / width ** 2, 1 / height ** 2)), np.zeros((2, 1)))),
             np.array((0, 0, -1)),
         )
     )
@@ -202,16 +211,7 @@ def fit_one_ellipse_in_bb(bb):
         ((bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2)
     )  # Bounding box centre.
     P = np.vstack(
-        (
-            np.hstack((np.eye(2, 2), centre.reshape(2, 1))),
-            np.array(
-                (
-                    0,
-                    0,
-                    1,
-                )
-            ),
-        )
+        (np.hstack((np.eye(2, 2), centre.reshape(2, 1))), np.array((0, 0, 1,)),)
     )
     Cinv = P.dot(np.linalg.inv(Ccn)).dot(P.transpose())
 
