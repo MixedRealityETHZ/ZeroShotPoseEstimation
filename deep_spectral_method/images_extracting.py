@@ -37,7 +37,6 @@ def extract_images(video_path: str, images_root):
             break
 
     cam.release()
-    cv2.destroyAllWindows()
     print("\n Saving all images in ", images_root)
 
 

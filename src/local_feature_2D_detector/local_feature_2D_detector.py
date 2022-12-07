@@ -7,7 +7,6 @@ from src.utils.colmap.read_write_model import read_model
 from src.utils.data_utils import get_K_crop_resize, get_image_crop_resize
 from src.utils.vis_utils import reproj
 
-device = "cpu"
 
 def pack_extract_data(img_path):
     image = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
@@ -16,7 +15,7 @@ def pack_extract_data(img_path):
     return torch.Tensor(image)
 
 
-def pack_match_data(db_detection, query_detection, db_size, query_size, device=device):
+def pack_match_data(db_detection, query_detection, db_size, query_size, device):
     data = {}
     for k in db_detection.keys():
         data[k + "0"] = db_detection[k].__array__()
@@ -24,33 +23,23 @@ def pack_match_data(db_detection, query_detection, db_size, query_size, device=d
         data[k + "1"] = query_detection[k].__array__()
     data = {k: torch.from_numpy(v)[None].float().to(device) for k, v in data.items()}
 
-    data["image0"] = torch.empty(
-        (
-            1,
-            1,
-        )
-        + tuple(db_size)[::-1]
-    )
-    data["image1"] = torch.empty(
-        (
-            1,
-            1,
-        )
-        + tuple(query_size)[::-1]
-    )
+    data["image0"] = torch.empty((1, 1) + tuple(db_size)[::-1])
+    data["image1"] = torch.empty((1, 1) + tuple(query_size)[::-1])
     return data
 
 
-class LocalFeatureObjectDetector():
-    def __init__(self, 
-                extractor,
-                 matcher, 
-                 sfm_ws_dir, 
-                 n_ref_view=15, 
-                 output_results=False, 
-                 detect_save_dir=None, 
-                 K_crop_save_dir=None,
-                 device="cpu"):
+class LocalFeatureObjectDetector:
+    def __init__(
+        self,
+        extractor,
+        matcher,
+        sfm_ws_dir,
+        n_ref_view=15,
+        output_results=False,
+        detect_save_dir=None,
+        K_crop_save_dir=None,
+        device="cpu",
+    ):
         self.device = device
         self.extractor = extractor.to(self.device)
         self.matcher = matcher.to(self.device)
@@ -90,7 +79,9 @@ class LocalFeatureObjectDetector():
             db_shape = db["size"]
             query_shape = query["size"]
 
-            match_data = pack_match_data(db, query, db["size"], query["size"])
+            match_data = pack_match_data(
+                db, query, db["size"], query["size"], device=self.device
+            )
             match_pred = self.matcher(match_data)
             matches = match_pred["matches0"][0].detach().cpu().numpy()
             confs = match_pred["matching_scores0"][0].detach().cpu().numpy()
@@ -109,10 +100,12 @@ class LocalFeatureObjectDetector():
                 }
                 continue
 
+            ransac_start = time.time()
             # Estimate affine and warp source image:
             affine, inliers = cv2.estimateAffinePartial2D(
                 mkpts0, mkpts1, ransacReprojThreshold=6
             )
+            ransac_time = time.time() - ransac_start
 
             # Estimate box:
             four_corner = np.array(
@@ -167,7 +160,6 @@ class LocalFeatureObjectDetector():
         K_crop, K_crop_homo = get_K_crop_resize(bbox, K, [crop_size, crop_size])
         return image_crop, K_crop
 
-    
     def crop_img_by_bbox(self, query_img_path, bbox, K=None, crop_size=512):
         """
         Crop image by detect bbox
@@ -183,7 +175,7 @@ class LocalFeatureObjectDetector():
         x1, y1 = bbox[2], bbox[3]
         origin_img = cv2.imread(query_img_path, cv2.IMREAD_GRAYSCALE)
 
-        resize_shape = np.array([y1 - y0, x1 - x0])
+        resize_shape = np.array([int(y1 - y0), int(x1 - x0)])
         if K is not None:
             K_crop, K_crop_homo = get_K_crop_resize(bbox, K, resize_shape)
         image_crop, trans1 = get_image_crop_resize(origin_img, bbox, resize_shape)
@@ -193,16 +185,24 @@ class LocalFeatureObjectDetector():
         if K is not None:
             K_crop, K_crop_homo = get_K_crop_resize(bbox_new, K_crop, resize_shape)
         image_crop, trans2 = get_image_crop_resize(image_crop, bbox_new, resize_shape)
-        
+
         return image_crop, K_crop if K is not None else None
-    
+
     def save_detection(self, crop_img, query_img_path):
         if self.output_results and self.detect_save_dir is not None:
-            cv2.imwrite(osp.join(self.detect_save_dir, osp.basename(query_img_path)), crop_img)
-    
+            cv2.imwrite(
+                osp.join(self.detect_save_dir, osp.basename(query_img_path)), crop_img
+            )
+
     def save_K_crop(self, K_crop, query_img_path):
         if self.output_results and self.K_crop_save_dir is not None:
-            np.savetxt(osp.join(self.K_crop_save_dir, osp.splitext(osp.basename(query_img_path))[0] + '.txt'), K_crop) # K_crop: 3*3
+            np.savetxt(
+                osp.join(
+                    self.K_crop_save_dir,
+                    osp.splitext(osp.basename(query_img_path))[0] + ".txt",
+                ),
+                K_crop,
+            )  # K_crop: 3*3
 
     def detect(self, query_img, query_img_path, K, crop_size=512):
         """
@@ -220,7 +220,7 @@ class LocalFeatureObjectDetector():
             query_inp = query_img[None].to(self.device)
         else:
             query_inp = query_img.to(self.device)
-        
+
         # Extract query image features:
         query_inp = self.extractor(query_inp)
         query_inp = {k: v[0].detach().cpu().numpy() for k, v in query_inp.items()}
@@ -230,17 +230,22 @@ class LocalFeatureObjectDetector():
         bbox = self.detect_by_matching(
             query=query_inp,
         )
-        image_crop, K_crop = self.crop_img_by_bbox(query_img_path, bbox, K, crop_size=crop_size)
-        self.save_detection(image_crop, query_img_path)
-        self.save_K_crop(K_crop, query_img_path)
+
+        image_crop, K_crop = self.crop_img_by_bbox(
+            query_img_path, bbox, K, crop_size=crop_size
+        )
+        # self.save_detection(image_crop, query_img_path)
+        # self.save_K_crop(K_crop, query_img_path)
 
         # To Tensor:
         image_crop = image_crop.astype(np.float32) / 255
         image_crop_tensor = torch.from_numpy(image_crop)[None][None].to(self.device)
 
         return bbox, image_crop_tensor, K_crop
-    
-    def previous_pose_detect(self, query_img_path, K, pre_pose, bbox3D_corner, crop_size=512):
+
+    def previous_pose_detect(
+        self, query_img_path, K, pre_pose, bbox3D_corner, crop_size=512
+    ):
         """
         Detect object by projecting 3D bbox with estimated last frame pose.
         Input:
@@ -259,7 +264,9 @@ class LocalFeatureObjectDetector():
         x1, y1 = np.max(proj_2D_coor, axis=0)
         bbox = np.array([x0, y0, x1, y1]).astype(np.int32)
 
-        image_crop, K_crop = self.crop_img_by_bbox(query_img_path, bbox, K, crop_size=crop_size)
+        image_crop, K_crop = self.crop_img_by_bbox(
+            query_img_path, bbox, K, crop_size=crop_size
+        )
         self.save_detection(image_crop, query_img_path)
         self.save_K_crop(K_crop, query_img_path)
 

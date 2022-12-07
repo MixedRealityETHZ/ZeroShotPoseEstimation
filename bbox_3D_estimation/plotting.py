@@ -15,7 +15,7 @@ import matplotlib.patches as mpatches
 import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
 
-from .lfd import (
+from lfd import (
     dual_ellipse_to_parameters,
     project_ellipsoids,
     dual_quadric_to_ellipsoid_parameters,
@@ -186,8 +186,10 @@ def plot_camera(M, figure_axes):
     figure_axes.scatter(t[0], t[1], t[2])
 
 
-def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, points, GT_points, visibility=None):
-    """Plot """
+def plot_3D_scene(
+    estQs, gtQs, Ms_t, dataset, save_output_images, points, GT_points, visibility=None
+):
+    """Plot"""
     fig = plt.figure(figsize=(8, 8))  # Open a new figure.
     figure_axes = fig.add_subplot(111, projection="3d")
 
@@ -203,7 +205,7 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, points, GT_poi
 
     # Plot the camera poses in black.
     for ind, pose_id in enumerate(range(Ms_t.shape[0] // 4)):
-        if visibility is None or visibility[ind]==1:
+        if visibility is None or visibility[ind] == 1:
             plot_camera(Ms_t[pose_id * 4 : pose_id * 4 + 4, :].transpose(), figure_axes)
 
     figure_axes.set_xlabel("X axis")
@@ -219,35 +221,44 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, points, GT_poi
 
     Z = points
     # list of sides' polygons of figure
-    verts = [[Z[0],Z[1],Z[3],Z[2]],
-    [Z[4],Z[5],Z[7],Z[6]],
-    [Z[2],Z[3],Z[7],Z[6]],
-    [Z[0],Z[1],Z[5],Z[4]], 
-    [Z[0],Z[2],Z[6],Z[4]],     
-    [Z[1],Z[3],Z[7],Z[5]]]
+    verts = [
+        [Z[0], Z[1], Z[3], Z[2]],
+        [Z[4], Z[5], Z[7], Z[6]],
+        [Z[2], Z[3], Z[7], Z[6]],
+        [Z[0], Z[1], Z[5], Z[4]],
+        [Z[0], Z[2], Z[6], Z[4]],
+        [Z[1], Z[3], Z[7], Z[5]],
+    ]
 
     # plot sides
-    figure_axes.add_collection3d(Poly3DCollection(verts, 
-    facecolors='cyan', linewidths=1, edgecolors='r', alpha=.25))
-    
-    figure_axes.scatter(points[:,0], points[:,1], points[:,2])
+    figure_axes.add_collection3d(
+        Poly3DCollection(
+            verts, facecolors="cyan", linewidths=1, edgecolors="r", alpha=0.25
+        )
+    )
+
+    figure_axes.scatter(points[:, 0], points[:, 1], points[:, 2])
 
     if GT_points is not None:
         Z = GT_points
         # list of sides' polygons of figure
-        verts = [[Z[0],Z[1],Z[3],Z[2]],
-        [Z[4],Z[5],Z[7],Z[6]],
-        [Z[2],Z[3],Z[7],Z[6]],
-        [Z[0],Z[1],Z[5],Z[4]], 
-        [Z[0],Z[2],Z[6],Z[4]],     
-        [Z[1],Z[3],Z[7],Z[5]]]
+        verts = [
+            [Z[0], Z[1], Z[3], Z[2]],
+            [Z[4], Z[5], Z[7], Z[6]],
+            [Z[2], Z[3], Z[7], Z[6]],
+            [Z[0], Z[1], Z[5], Z[4]],
+            [Z[0], Z[2], Z[6], Z[4]],
+            [Z[1], Z[3], Z[7], Z[5]],
+        ]
 
         # plot sides
-        figure_axes.add_collection3d(Poly3DCollection(verts, 
-        facecolors='blue', linewidths=1, edgecolors='r', alpha=.25))
-        
-        figure_axes.scatter(GT_points[:,0], GT_points[:,1], GT_points[:,2])
+        figure_axes.add_collection3d(
+            Poly3DCollection(
+                verts, facecolors="blue", linewidths=1, edgecolors="r", alpha=0.25
+            )
+        )
 
+        figure_axes.scatter(GT_points[:, 0], GT_points[:, 1], GT_points[:, 2])
 
     fig.show()
 
@@ -255,5 +266,5 @@ def plot_3D_scene(estQs, gtQs, Ms_t, dataset, save_output_images, points, GT_poi
         output_path = "Output/{:s}/".format(dataset)
         # Create output directory, in case it does not exist already.
         Path(output_path).mkdir(parents=True, exist_ok=True)
-        plt.savefig('{:s}/ellipsoids.png'.format(output_path), pad_inches=0.0)
+        plt.savefig("{:s}/ellipsoids.png".format(output_path), pad_inches=0.0)
     return fig

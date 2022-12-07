@@ -14,12 +14,11 @@ from bbox_3D_estimation.utils import sort_path_list, predict_3D_bboxes
 
 
 if __name__ == "__main__":
-    data_root = os.getcwd() + "/data/onepose_datasets/test_moccona"
-    feature_dir = data_root + "/DSM_features"
-    segment_dir = data_root + "/test_moccona-annotate"
+    data_root = os.getcwd() + "/data/onepose_datasets/val_data/0606-tiger-others"
+    segment_dir = data_root + "/tiger-2"
     intriscs_path = segment_dir + "/intrinsics.txt"
 
-    BboxPredictor = UnsupBbox(feature_dir=feature_dir)
+    BboxPredictor = UnsupBbox(on_GPU=True)
     K, _ = data_utils.get_K(intriscs_path)
 
     poses_list = glob.glob(os.path.join(os.getcwd(), f"{segment_dir}/poses", "*.txt"))

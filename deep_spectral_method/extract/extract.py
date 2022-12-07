@@ -2,6 +2,7 @@ from functools import partial
 from pathlib import Path
 from typing import Optional, Tuple
 
+import io
 import cv2
 import fire
 import numpy as np
@@ -11,6 +12,7 @@ from PIL import Image
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.decomposition import PCA
 from torchvision.utils import draw_bounding_boxes
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 from accelerate import Accelerator
 from scipy.sparse.linalg import eigsh
@@ -25,6 +27,7 @@ def extract_features(
     patch_size: int,
     num_heads: int,
     images,
+    on_GPU,
 ):
 
     """
@@ -51,12 +54,17 @@ def extract_features(
 
     # Reshape image
     P = patch_size
-    images = torch.from_numpy(images.transpose((-1,0,1))[np.newaxis,...]).type(torch.float)
+    # images = torch.from_numpy(images.transpose((-1, 0, 1))[np.newaxis, ...]).type(
+    #     torch.float
+    # )
     B, C, H, W = images.shape
     H_patch, W_patch = H // P, W // P
     H_pad, W_pad = H_patch * P, W_patch * P
     T = H_patch * W_patch + 1  # number of tokens, add 1 for [CLS]
     images = images[:, :, :H_pad, :W_pad]
+
+    if on_GPU:
+        images = images.cuda()
 
     model.get_intermediate_layers(images)[0].squeeze(0)
     output_qkv = (
@@ -67,8 +75,8 @@ def extract_features(
     output_dict["k"] = output_qkv[1].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
 
     # Metadata
-    #output_dict["indices"] = indices[0]
-    #output_dict["file"] = files[0]
+    # output_dict["indices"] = indices[0]
+    # output_dict["file"] = files[0]
     output_dict["patch_size"] = patch_size
     output_dict["shape"] = images.shape
     output_dict = {
@@ -80,10 +88,7 @@ def extract_features(
 
 
 def _extract_eig(
-    K: int,
-    data_dict: dict,
-    on_gpu: bool = False,
-    which_features: str = "k",
+    K: int, data_dict: dict, on_gpu: bool = False, which_features: str = "k", viz=False
 ):
     if on_gpu:
         device = "cuda"
@@ -146,6 +151,15 @@ def _extract_eig(
             eigenvectors[k] = 0 - eigenvectors[k]
 
     # # Save dict
+    if viz:
+        vis_eigenvectors(
+            eigenvectors=eigenvectors,
+            H_patch=H_patch,
+            W_patch=W_patch,
+            H_pad=H_pad,
+            W_pad=W_pad,
+            K=K,
+        )
 
     eig_dict = {"eigenvalues": eigenvalues, "eigenvectors": eigenvectors}
 
@@ -295,6 +309,7 @@ def _extract_single_region_segmentations(
     threshold: float,
     feature_dict: dict,
     eigs_dict: dict,
+    adaptive_threshold=True,
 ):
     # index, (feature_path, eigs_path) = inp
 
@@ -320,6 +335,8 @@ def _extract_single_region_segmentations(
     eigenvector = data_dict["eigenvectors"][
         1
     ].numpy()  # take smallest non-zero eigenvector
+    if adaptive_threshold:
+        threshold = max(eigenvector) / 5
     segmap = (eigenvector > threshold).reshape(H_patch, W_patch)
 
     # Save dict
@@ -861,6 +878,19 @@ def vis_segmentations(
         # Display
         for d, col in zip(cols, st.columns(len(cols))):
             col.image(**d)
+
+
+def vis_eigenvectors(eigenvectors, H_patch, W_patch, H_pad, W_pad, K):
+    # eigenvectors_upscaled = []
+    eigenvector = eigenvectors[1].reshape(
+        1, 1, H_patch, W_patch
+    )  # .reshape(1, 1, H_pad, W_pad)
+    eigenvector: torch.Tensor = F.interpolate(
+        eigenvector, size=(H_pad, W_pad), mode="bilinear", align_corners=False
+    )  # slightly off, but for visualizations this is okay
+    fig = plt.figure(num=1)
+    plt.clf()
+    plt.imshow(eigenvector.squeeze().numpy())
 
 
 if __name__ == "__main__":

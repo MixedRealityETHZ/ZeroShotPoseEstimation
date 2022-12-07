@@ -1,5 +1,2 @@
-- +experiment=test_demo
+- +experiment=test_demo.yaml
 - use_tracking=False
-- input.data_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/onepose_datasets/test_moccona
-  test_moccona-test
-- input.sfm_model_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/sfm_model/test_moccona

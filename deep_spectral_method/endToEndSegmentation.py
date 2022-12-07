@@ -6,34 +6,28 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from PIL import Image
 from matplotlib.patches import Rectangle
-import time
+import os, cv2, torch
 from accelerate import Accelerator
 
 from torch.utils.data import DataLoader
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def main():
     extract_video = True
     plot = True
-    on_GPU = True
-    video_path = "./Frames2.m4v"
-    images_folder = "/images"
-    imlist_folder = "/lists"
+    on_GPU = True if device == "cuda" else False
+    PATH = (
+        os.getcwd()
+        + "/data/onepose_datasets/val_data/0620-dinosaurcup-bottle/dinosaurcup-4"
+    )
+    video_path = f"{PATH}/Frames.m4v"
+    images_root = f"{PATH}/extracted_images"
+    imlist_root = f"{PATH}/lists"
     file_txt = "/images.txt"
     model_name = "dino_vits16"
-    default_data_path = "data/object-segmentation/custom_dataset"
-    feature_relative_path = "/features/dino_vits16"
-    eigs_relative_path = "/eigs/laplacian_dino_vits16"
-    sr_segmentations = "/single_region_segmentation/patches/filtered"
-    full_segmentations = "/single_region_segmentation/crf/laplacian_dino_vits16"
-
-    images_root = default_data_path + images_folder
-    imlist_root = default_data_path + imlist_folder
     images_list = imlist_root + file_txt
-    feature_dir = default_data_path + feature_relative_path
-    eigs_dir = default_data_path + eigs_relative_path
-    sr_dir = default_data_path + sr_segmentations
-    full_seg_dir = default_data_path + full_segmentations
 
     # Try with first example
     # Before running this example, you should already have the list of images and the images per frame from the video
@@ -49,6 +43,7 @@ def main():
     # Second step, all the functions without creating folders
     # Load the model
     model, val_transform, patch_size, num_heads = utils.get_model(model_name)
+    model = model.to(device)
 
     dataset = utils.ImagesDataset(
         filenames=filenames, images_root=images_root, transform=val_transform
@@ -56,30 +51,20 @@ def main():
 
     dataloader = DataLoader(dataset, batch_size=1)
 
-    if on_GPU:
-        accelerator = Accelerator(mixed_precision="fp16", cpu=False)
-    else:
-        accelerator = Accelerator(mixed_precision="no", cpu=True)
-    model, dataloader = accelerator.prepare(model, dataloader)
-    model = model.to(accelerator.device)
-
-    feat_out = {}
-
-    def hook_fn_forward_qkv(module, input, output):
-        feat_out["qkv"] = output
-
-    model._modules["blocks"][-1]._modules["attn"]._modules["qkv"].register_forward_hook(
-        hook_fn_forward_qkv
-    )
+    # if on_GPU:
+    #     accelerator = Accelerator(mixed_precision="no", cpu=False)
+    # else:
+    #     accelerator = Accelerator(mixed_precision="no", cpu=True)
+    # model, dataloader = accelerator.prepare(model, dataloader)
+    # model = model.to(accelerator.device)
 
     # here we are creating sub plots
     for k, (images, _, _) in enumerate(tqdm(dataloader)):
+
         bbox = extract_bbox(
             model=model,
             patch_size=patch_size,
             num_heads=num_heads,
-            accelerator=accelerator,
-            feat_out=feat_out,
             images=images,
             on_GPU=on_GPU,
         )
@@ -88,6 +73,8 @@ def main():
             # Bounding boxes
             limits = bbox["bboxes_original_resolution"][0]
             image_PIL = Image.open(images_root + "/" + filenames[k])
+            fig = plt.figure(num=42)
+            plt.clf()
             plt.imshow(image_PIL, alpha=0.9)
             plt.gca().add_patch(
                 Rectangle(
@@ -101,20 +88,20 @@ def main():
             )
             plt.show(block=False)
             plt.pause(0.0001)
-            plt.clf()
 
 
-def extract_bbox(model, patch_size, num_heads, accelerator, feat_out, images, on_GPU):
+def extract_bbox(model, patch_size, num_heads, images, on_GPU):
     feature_dict = extract.extract_features(
         model=model,
         patch_size=patch_size,
         num_heads=num_heads,
-        accelerator=accelerator,
-        feat_out=feat_out,
         images=images,
+        on_GPU=on_GPU,
     )
 
-    eigs_dict = extract._extract_eig(K=4, data_dict=feature_dict, on_gpu=on_GPU)
+    eigs_dict = extract._extract_eig(
+        K=8, data_dict=feature_dict, on_gpu=on_GPU, viz=True
+    )
 
     # Segmentation
     segmap = extract.extract_single_region_segmentations(

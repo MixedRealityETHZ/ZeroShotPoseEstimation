@@ -17,7 +17,12 @@ from src.utils.bbox_3D_utils import compute_3dbbox_from_sfm
 from src.utils.model_io import load_network
 from src.local_feature_2D_detector import LocalFeatureObjectDetector
 from deep_spectral_method.detection_2D_utils import UnsupBbox
-from bbox_3D_estimation.utils import Detector3D, read_list_poses, sort_path_list, predict_3D_bboxes
+from bbox_3D_estimation.utils import (
+    Detector3D,
+    read_list_poses,
+    sort_path_list,
+    predict_3D_bboxes,
+)
 from pytorch_lightning import seed_everything
 
 """Inference & visualize"""
@@ -29,9 +34,11 @@ seed_everything(12345)
 
 if torch.cuda.is_available():
     device = "cuda"
+    compute_on_GPU = True
     logger.info("Running OnePose with GPU, will it work?")
 else:
     device = "cpu"
+    compute_on_GPU = False
     logger.info("Running OnePose with CPU")
 
 
@@ -124,6 +131,7 @@ def load_2D_matching_model(cfg):
 
         match_model = SuperGlue(confs[cfg.network.matching]["conf"])
         match_model.eval()
+        match_model.to(device)
         load_network(match_model, cfg.model.match_model_path)
         return match_model
 
@@ -153,30 +161,12 @@ def inference_core(
     data_root,
     seq_dir,
     sfm_model_dir,
-    object_det_type="features",
+    object_det_type="detection",
     box_3D_detect_type="image_based",
-    verbose=False
+    verbose=False,
 ):
 
-    if cfg.use_tracking:
-        from src.tracker.ba_tracker import BATracker
-
-        logger.warning(
-            "The tracking module is under development. "
-            "Running OnePose inference without tracking instead."
-        )
-        tracker = BATracker(cfg)
-        track_interval = 5
-    else:
-        logger.info("Running OnePose inference without tracking")
-
-    if object_det_type == "features":
-        pass
-    elif object_det_type == "detection":
-        feature_dir = data_root + "/DSM_features"
-        BboxPredictor = UnsupBbox(
-            feature_dir=feature_dir, downscale_factor=0.3, on_GPU=False
-        )
+    BboxPredictor = UnsupBbox(downscale_factor=0.3, on_GPU=compute_on_GPU)
 
     # Load models and prepare data:
     matching_model, extractor_model = load_model(cfg)
@@ -194,23 +184,20 @@ def inference_core(
     sfm_ws_dir = paths["sfm_ws_dir"]
     anno_3d_box = data_root + "/box3d_corners.txt"
 
-    if box_3D_detect_type == "sfm_based" and not os.path.exists(anno_3d_box):
-        bbox3d = compute_3dbbox_from_sfm(sfm_ws_dir=sfm_ws_dir, data_root=data_root)
-
-    elif box_3D_detect_type == "image_based" and not os.path.exists(anno_3d_box):
+    if box_3D_detect_type == "image_based" or not os.path.exists(anno_3d_box):
         logger.info(
             f"3d bbox estimated with {box_3D_detect_type} method, reading from file"
         )
-        segment_dir = data_root + "/test_moccona-annotate"
-        intriscs_path = segment_dir + "/intrinsics.txt"
+
+        intriscs_path = seq_dir + "/intrinsics.txt"
 
         K_anno, _ = data_utils.get_K(intriscs_path)
         poses_list_anno = glob.glob(
-            os.path.join(os.getcwd(), f"{segment_dir}/poses", "*.txt")
+            os.path.join(os.getcwd(), f"{seq_dir}/poses", "*.txt")
         )
         poses_list_anno = sort_path_list(poses_list_anno)
         img_lists_anno = glob.glob(
-            os.path.join(os.getcwd(), f"{segment_dir}/color_full", "*.png")
+            os.path.join(os.getcwd(), f"{seq_dir}/color_full", "*.png")
         )
         img_lists_anno = sort_path_list(img_lists_anno)
 
@@ -220,23 +207,25 @@ def inference_core(
             poses_list=poses_list_anno,
             K=K_anno,
             data_root=data_root,
-            step=10
+            step=10,
         )
-    
+
+        logger.info(f"built from file {anno_3d_box}")
+        print("done")
+
     else:
         logger.info(f"reading from file {anno_3d_box}")
-        
-    
 
-    box3d_path = path_utils.get_3d_box_path(data_root)
+    box3d_path = path_utils.get_3d_box_path(data_root, annotated=False)
 
     local_feature_obj_detector = LocalFeatureObjectDetector(
         extractor_model,
         matching_2D_model,
-        n_ref_view=2,
+        n_ref_view=10,
         sfm_ws_dir=sfm_ws_dir,
         output_results=False,
         detect_save_dir=paths["vis_detector_dir"],
+        device=device,
     )
 
     # Prepare 3D features:
@@ -256,26 +245,27 @@ def inference_core(
         clt_data["descriptors3d"], clt_data["scores3d"], idxs, num_3d, num_leaf
     )
 
-    pred_poses = {}  # {id:[pred_pose, inliers]}
-
     dataset = NormalizedDataset(
         img_lists, confs[cfg.network.detection]["preprocessing"]
     )
     loader = DataLoader(dataset, num_workers=1)
 
     for id, data in enumerate(tqdm(loader)):
+        img_path = data["path"][0]
         with torch.no_grad():
-            img_path = data["path"][0]
             inp = data["image"].to(device)
             # Detect object:
             # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
             start = time.time()
             if object_det_type == "features":
                 bbox, inp_crop, K_crop = local_feature_obj_detector.detect(
-                    inp, img_path, K
+                    inp,
+                    img_path,
+                    K,
                 )
             elif object_det_type == "detection":
-                image = cv2.imread(data["path"][0]) 
+                image = cv2.imread(img_path)
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=K)
 
                 inp_crop, K_crop = local_feature_obj_detector.crop_img_by_bbox(
@@ -284,13 +274,15 @@ def inference_core(
                     K=K,
                     crop_size=512,
                 )
-                inp_crop = torchvision.transforms.functional.to_tensor(inp_crop).unsqueeze(0)
-                #inp_crop = torchvision.transforms.functional.to_tensor(inp_crop)
+                inp_crop = torchvision.transforms.functional.to_tensor(
+                    inp_crop
+                ).unsqueeze(0)
+                inp_crop = inp_crop.to(device)
 
-
-            # print(K_crop, inp_crop.shape)
             if verbose:
-                logger.info(f"feature matching runtime: {(time.time() - start)%60} seconds")
+                logger.info(
+                    f"feature matching runtime: {(time.time() - start)%60} seconds"
+                )
 
             # Detect query image(cropped) keypoints and extract descriptors:
             pred_detection = extractor_model(inp_crop)
@@ -317,64 +309,11 @@ def inference_core(
             )
 
             # Estimate object pose by 2D-3D correspondences:
-            pose_pred, pose_pred_homo, inliers = eval_utils.ransac_PnP(
+            _, pose_pred_homo, inliers = eval_utils.ransac_PnP(
                 K_crop, mkpts2d, mkpts3d, scale=1000
             )
 
-            # Store previous estimated poses:
-            pred_poses[id] = [pose_pred, inliers]
-            image_crop = np.asarray(
-                (inp_crop * 255).squeeze().cpu().numpy(), dtype=np.uint8
-            )
-
-        if cfg.use_tracking:
-            frame_dict = {
-                "im_path": image_crop,
-                "kpt_pred": pred_detection,
-                "pose_pred": pose_pred_homo,
-                "pose_gt": pose_pred_homo,
-                "K": K_crop,
-                "K_crop": K_crop,
-                "data": data,
-            }
-
-            use_update = id % track_interval == 0
-            if use_update:
-                mkpts3d_db_inlier = mkpts3d[inliers.flatten()]
-                mkpts2d_q_inlier = mkpts2d[inliers.flatten()]
-
-                n_kpt = kpts2d.shape[0]
-
-                valid_query_id = np.where(valid != False)[0][inliers.flatten()]
-                kpts3d_full = np.ones([n_kpt, 3]) * 10086
-                kpts3d_full[valid_query_id] = mkpts3d_db_inlier
-                kpt3d_ids = matches[valid][inliers.flatten()]
-
-                kf_dict = {
-                    "im_path": image_crop,
-                    "kpt_pred": pred_detection,
-                    "valid_mask": valid,
-                    "mkpts2d": mkpts2d_q_inlier,
-                    "mkpts3d": mkpts3d_db_inlier,
-                    "kpt3d_full": kpts3d_full,
-                    "inliers": inliers,
-                    "kpt3d_ids": kpt3d_ids,
-                    "valid_query_id": valid_query_id,
-                    "pose_pred": pose_pred_homo,
-                    "pose_gt": pose_pred_homo,
-                    "K": K_crop,
-                }
-
-                need_update = not tracker.update_kf(kf_dict)
-
-            if id == 0:
-                tracker.add_kf(kf_dict)
-                id += 1
-                pose_opt = pose_pred_homo
-            else:
-                pose_init, pose_opt, ba_log = tracker.track(frame_dict, auto_mode=False)
-        else:
-            pose_opt = pose_pred_homo
+        pose_opt = pose_pred_homo
 
         # Visualize:
         vis_utils.save_demo_image(
@@ -382,7 +321,7 @@ def inference_core(
             K,
             image_path=img_path,
             box3d_path=box3d_path,
-            draw_box=len(inliers) > 6,
+            draw_box=len(inliers) > 3,
             save_path=osp.join(paths["vis_box_dir"], f"{id}.jpg"),
         )
 
