@@ -1,7 +1,7 @@
 # ZeroShotPoseEstimation: OnePose and Deep Spectral Method
 
 > ZeroShotPoseEstimation: OnePose and Deep Spectral Method 
-> [Roberto Pellerito](https://github.com/senecobis)<sup>\*</sup>, [Alessandro Burzio](https://github.com/Ale-Burzio)<sup>\*</sup>, [Lorenzo Piglia]()<sup>\*</sup>, [Diego Machain](), [Elisabetta Fedele]()
+> [Roberto Pellerito](https://github.com/senecobis)<sup>\*</sup>, [Alessandro Burzio](https://github.com/Ale-Burzio)<sup>\*</sup>, [Lorenzo Piglia]()<sup>\*</sup>, [Diego Machain]()
 
 (to run DEMO with custom dataset see below)
 
