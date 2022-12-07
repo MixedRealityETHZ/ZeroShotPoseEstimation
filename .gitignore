@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+data/
+
 # C extensions
 *.so
 
@@ -14,6 +16,8 @@ dist/
 downloads/
 eggs/
 .eggs/
+.vscode/
+.hydra/
 lib/
 lib64/
 parts/
@@ -131,3 +135,5 @@ dmypy.json
 dev_ws/install*
 dev_ws/log*
 dev_ws/build*
+
+.DS_Store
