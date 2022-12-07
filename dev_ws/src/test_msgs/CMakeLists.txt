@@ -20,7 +20,11 @@ find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
-  "msg/BoundingBox3D.msg"
+  "msg/BoundingBoxStamped.msg"
+  "msg/PosedImageStamped.msg"
+  "msg/SimpleBBox.msg"
+  "msg/UnityColor.msg"
+  "msg/PosRot.msg"
   DEPENDENCIES geometry_msgs
  )
 ament_export_dependencies(rosidl_default_runtime)
