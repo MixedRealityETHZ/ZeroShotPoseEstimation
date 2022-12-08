@@ -23,3 +23,4 @@ scikit-learn
 SimpleCRF
 albumentations
 loguru
+h5py

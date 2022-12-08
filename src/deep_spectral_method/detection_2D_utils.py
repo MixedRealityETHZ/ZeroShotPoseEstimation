@@ -8,20 +8,30 @@ import cv2
 
 
 class UnsupBbox:
-    def __init__(self, downscale_factor=0.3, on_GPU=True) -> None:
+    def __init__(self, downscale_factor=0.3, device="cpu") -> None:
         self.model_name = "dino_vits16"
         self.num_workers = 0  # decrease this if out_of_memory error
         self.downscale_factor = downscale_factor
-        self.on_GPU = on_GPU
+        self.device = device
+
+        if device=="cpu":
+            self.on_GPU = False
+        elif device=="mps":
+            self.on_GPU = False
+        elif device=="cuda":
+            self.on_GPU = True
+        elif device=="gpu":
+            self.on_GPU = True
+        else:
+            print("\n unknown device")
+
         (
             self.model,
             self.val_transform,
             self.patch_size,
             self.num_heads,
         ) = utils.get_model(self.model_name)
-        self.model = self.model.to(
-            "cuda" if on_GPU and torch.cuda.is_available() else "cpu"
-        )
+        self.model = self.model.to(device)
 
     def downscale_image(self, image):
         return cv2.resize(
@@ -39,11 +49,11 @@ class UnsupBbox:
             patch_size=self.patch_size,
             num_heads=self.num_heads,
             images=image_half,
-            on_GPU=self.on_GPU,
+            device=self.device,
         )
 
         eigs_dict = extract._extract_eig(
-            K=4, data_dict=feature_dict, on_gpu=self.on_GPU
+            K=4, data_dict=feature_dict, device=self.device
         )
 
         # small Segmentation

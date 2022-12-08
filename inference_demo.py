@@ -16,10 +16,7 @@ from src.utils import data_utils, path_utils, eval_utils, vis_utils
 from src.utils.model_io import load_network
 from src.local_feature_2D_detector import LocalFeatureObjectDetector
 from src.deep_spectral_method.detection_2D_utils import UnsupBbox
-from src.bbox_3D_estimation.utils import (
-    sort_path_list,
-    predict_3D_bboxes,
-)
+
 from pytorch_lightning import seed_everything
 
 """Inference & visualize"""
@@ -28,15 +25,22 @@ from src.sfm.extract_features import confs
 
 seed_everything(12345)
 
+def get_device(no_mps=True):
+    if torch.cuda.is_available():
+        device = "cuda"
+        compute_on_GPU = True
+        logger.info("Running OnePose with GPU, will it work?")
+    elif torch.backends.mps.is_available() and not no_mps:
+        device = "mps"
+        logger.info("Running OnePose with NEURAL ENGINE")
+    else:
+        device = "cpu"
+        compute_on_GPU = False
+        logger.info("Running OnePose with CPU")
 
-if torch.cuda.is_available():
-    device = "cuda"
-    compute_on_GPU = True
-    logger.info("Running OnePose with GPU, will it work?")
-else:
-    device = "cpu"
-    compute_on_GPU = False
-    logger.info("Running OnePose with CPU")
+    return device
+
+device = get_device(no_mps=True)
 
 
 def get_default_paths(cfg, data_root, data_dir, sfm_model_dir):
@@ -162,7 +166,7 @@ def inference_core(
     verbose=False,
 ):
 
-    BboxPredictor = UnsupBbox(downscale_factor=0.3, on_GPU=compute_on_GPU)
+    BboxPredictor = UnsupBbox(downscale_factor=0.3, device=get_device(no_mps=True))
 
     # Load models and prepare data:
     matching_model, extractor_model = load_model(cfg)
@@ -194,7 +198,7 @@ def inference_core(
         sfm_ws_dir=sfm_ws_dir,
         output_results=False,
         detect_save_dir=paths["vis_detector_dir"],
-        device=device,
+        device="cuda" if torch.cuda.is_available() else "cpu",
     )
 
     # Prepare 3D features:

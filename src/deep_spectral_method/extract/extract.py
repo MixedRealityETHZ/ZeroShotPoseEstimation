@@ -14,7 +14,6 @@ from sklearn.decomposition import PCA
 from torchvision.utils import draw_bounding_boxes
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from accelerate import Accelerator
 from scipy.sparse.linalg import eigsh
 
 from . import extract_utils as utils
@@ -27,7 +26,7 @@ def extract_features(
     patch_size: int,
     num_heads: int,
     images,
-    on_GPU,
+    device
 ):
 
     """
@@ -54,17 +53,13 @@ def extract_features(
 
     # Reshape image
     P = patch_size
-    # images = torch.from_numpy(images.transpose((-1, 0, 1))[np.newaxis, ...]).type(
-    #     torch.float
-    # )
     B, C, H, W = images.shape
     H_patch, W_patch = H // P, W // P
     H_pad, W_pad = H_patch * P, W_patch * P
     T = H_patch * W_patch + 1  # number of tokens, add 1 for [CLS]
     images = images[:, :, :H_pad, :W_pad]
 
-    if on_GPU:
-        images = images.cuda()
+    images = images.to(device)
 
     model.get_intermediate_layers(images)[0].squeeze(0)
     output_qkv = (
@@ -75,8 +70,6 @@ def extract_features(
     output_dict["k"] = output_qkv[1].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
 
     # Metadata
-    # output_dict["indices"] = indices[0]
-    # output_dict["file"] = files[0]
     output_dict["patch_size"] = patch_size
     output_dict["shape"] = images.shape
     output_dict = {
@@ -88,12 +81,12 @@ def extract_features(
 
 
 def _extract_eig(
-    K: int, data_dict: dict, on_gpu: bool = False, which_features: str = "k", viz=False
+    K: int, data_dict: dict, device: str, which_features: str = "k", viz=False
 ):
-    if on_gpu:
-        device = "cuda"
+    if device == "cuda":
+        on_gpu = True
     else:
-        device = "cpu"
+        on_gpu = False
 
     feats = data_dict[which_features].squeeze().to(device)
     feats = F.normalize(feats, p=2, dim=-1)
