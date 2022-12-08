@@ -14,7 +14,6 @@ from sklearn.decomposition import PCA
 from torchvision.utils import draw_bounding_boxes
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from accelerate import Accelerator
 from scipy.sparse.linalg import eigsh
 
 from . import extract_utils as utils
@@ -29,7 +28,6 @@ def extract_features(
     images,
     on_GPU,
 ):
-
     """
     Extract features from a list of images.
 
@@ -72,7 +70,8 @@ def extract_features(
         .reshape(B, T, 3, num_heads, -1 // num_heads)
         .permute(2, 0, 3, 1, 4)
     )
-    output_dict["k"] = output_qkv[1].transpose(1, 2).reshape(B, T, -1)[:, 1:, :]
+    output_dict["k"] = output_qkv[1].transpose(
+        1, 2).reshape(B, T, -1)[:, 1:, :]
 
     # Metadata
     # output_dict["indices"] = indices[0]
@@ -99,7 +98,8 @@ def _extract_eig(
     feats = F.normalize(feats, p=2, dim=-1)
 
     # Get sizes
-    B, C, H, W, P, H_patch, W_patch, H_pad, W_pad = utils.get_image_sizes(data_dict)
+    B, C, H, W, P, H_patch, W_patch, H_pad, W_pad = utils.get_image_sizes(
+        data_dict)
     image_downsample_factor = P
     H_pad_lr, W_pad_lr = (
         H_pad // image_downsample_factor,
@@ -119,7 +119,7 @@ def _extract_eig(
             .T
         )
 
-    ### Feature affinities
+    # Feature affinities
     W_feat = feats @ feats.T
     W_feat = W_feat * (W_feat > 0)
     W_feat = W_feat.cpu().numpy()
@@ -174,7 +174,7 @@ def extract_eigs(
 ):
     """
     Extracts eigenvalues from features.
-    
+
     Example:
         python extract.py extract_eigs \
             --images_root "./data/VOC2012/images" \
@@ -218,13 +218,15 @@ def _extract_multi_region_segmentations(
         return  # skip because already generated
 
     # Sizes
-    B, C, H, W, P, H_patch, W_patch, H_pad, W_pad = utils.get_image_sizes(data_dict)
+    B, C, H, W, P, H_patch, W_patch, H_pad, W_pad = utils.get_image_sizes(
+        data_dict)
 
     # If adaptive, we use the gaps between eigenvalues to determine the number of
     # segments per image. If not, we use non_adaptive_num_segments to get a fixed
     # number of segments per image.
     if adaptive:
-        indices_by_gap = np.argsort(np.diff(data_dict["eigenvalues"].numpy()))[::-1]
+        indices_by_gap = np.argsort(
+            np.diff(data_dict["eigenvalues"].numpy()))[::-1]
         index_largest_gap = indices_by_gap[indices_by_gap != 0][
             0
         ]  # remove zero and take the biggest
@@ -242,7 +244,7 @@ def _extract_multi_region_segmentations(
         clusters = kmeans.fit_predict(feats)
     else:
         eigenvectors = data_dict["eigenvectors"][
-            1 : 1 + num_eigenvectors
+            1: 1 + num_eigenvectors
         ].numpy()  # take non-constant eigenvectors
         # import pdb; pdb.set_trace()
         clusters = kmeans.fit_predict(eigenvectors.T)
@@ -329,7 +331,8 @@ def _extract_single_region_segmentations(
     #    return  # skip because already generated
 
     # Sizes
-    B, C, H, W, P, H_patch, W_patch, H_pad, W_pad = utils.get_image_sizes(data_dict)
+    B, C, H, W, P, H_patch, W_patch, H_pad, W_pad = utils.get_image_sizes(
+        data_dict)
 
     # Eigenvector
     eigenvector = data_dict["eigenvectors"][
@@ -414,8 +417,10 @@ def _extract_bbox(
 
             # Find box
             mask = np.where(binary_mask == 1)
-            ymin, ymax = min(mask[0]), max(mask[0]) + 1  # add +1 because excluded max
-            xmin, xmax = min(mask[1]), max(mask[1]) + 1  # add +1 because excluded max
+            ymin, ymax = min(mask[0]), max(mask[0]) + \
+                1  # add +1 because excluded max
+            xmin, xmax = min(mask[1]), max(mask[1]) + \
+                1  # add +1 because excluded max
             bbox = [xmin, ymin, xmax, ymax]
             bbox_resized = [x * P for x in bbox]  # rescale to image size
             bbox_features = [
@@ -496,7 +501,8 @@ def extract_bbox_features(
 
     # Models
     model_name_lower = model_name.lower()
-    model, val_transform, patch_size, num_heads = utils.get_model(model_name_lower)
+    model, val_transform, patch_size, num_heads = utils.get_model(
+        model_name_lower)
     model.eval().to("cuda")
 
     # Loop over boxes
@@ -506,7 +512,8 @@ def extract_bbox_features(
         bboxes = bbox_dict["bboxes_original_resolution"]
         # Load image as tensor
         image_filename = str(Path(images_root) / f"{image_id}.jpg")
-        image = val_transform(Image.open(image_filename).convert("RGB"))  # (3, H, W)
+        image = val_transform(Image.open(
+            image_filename).convert("RGB"))  # (3, H, W)
         image = image.unsqueeze(0).to("cuda")  # (1, 3, H, W)
         features_crops = []
         for (xmin, ymin, xmax, ymax) in bboxes:
@@ -577,7 +584,7 @@ def extract_bbox_clusters(
         del bbox_dict[
             "features"
         ]  # bbox_dict['features'] = bbox_dict['features'].squeeze()
-        bbox_dict["clusters"] = clusters[idx : idx + num_bboxes]
+        bbox_dict["clusters"] = clusters[idx: idx + num_bboxes]
         idx = idx + num_bboxes
 
     # Save
@@ -633,7 +640,8 @@ def extract_semantic_segmentations(
         semantic_segmap = np.vectorize(semantic_map.__getitem__)(segmap)
         # Save
         output_file = str(Path(output_dir) / f"{image_id}.png")
-        Image.fromarray(semantic_segmap.astype(np.uint8)).convert("L").save(output_file)
+        Image.fromarray(semantic_segmap.astype(np.uint8)
+                        ).convert("L").save(output_file)
 
     print(f"Saved features to {output_dir}")
 
@@ -802,7 +810,8 @@ def vis_segmentations(
     colors = get_cmap("tab20", 21).colors[:, :3]
 
     # Which index
-    which_index = st.number_input(label="Which index to view (0 for all)", value=0)
+    which_index = st.number_input(
+        label="Which index to view (0 for all)", value=0)
 
     # Load
     total = 0
@@ -824,7 +833,8 @@ def vis_segmentations(
 
         # Resize
         segmap_fullres = cv2.resize(
-            segmap, dsize=image.shape[:2][::-1], interpolation=cv2.INTER_NEAREST
+            segmap, dsize=image.shape[:2][::-
+                                          1], interpolation=cv2.INTER_NEAREST
         )
 
         # Only view images with a specific class

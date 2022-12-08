@@ -1,8 +1,4 @@
-numpy
-torch
-torchvision
-torchaudio
-pytorch-lightning
+numpy==1.23.*
 pydegensac==0.1.2
 opencv_python
 pickle5
@@ -14,11 +10,12 @@ rich
 transforms3d
 natsort
 pymatting
-accelerate
 fire
-pillow
+pillow==9.3.0
 scikit-image
 tqdm
 scikit-learn
 SimpleCRF
 albumentations
+matplotlib
+loguru

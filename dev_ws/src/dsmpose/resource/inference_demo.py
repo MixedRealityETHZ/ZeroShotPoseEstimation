@@ -101,7 +101,8 @@ def load_model(cfg):
         """Load onepose model"""
         from src.models.GATsSPG_lightning_model import LitModelGATsSPG
 
-        trained_model = LitModelGATsSPG.load_from_checkpoint(checkpoint_path=model_path)
+        trained_model = LitModelGATsSPG.load_from_checkpoint(
+            checkpoint_path=model_path)
         trained_model.to(device)
         trained_model.eval()
 
@@ -149,7 +150,8 @@ def pack_data(avg_descriptors3d, clt_descriptors, keypoints3d, detection, image_
         "keypoints3d": keypoints3d[None].to(device),  # [1, n2, 3]
         "descriptors2d_query": descriptors2d[None].to(device),  # [1, dim, n1]
         "descriptors3d_db": avg_descriptors3d[None].to(device),  # [1, dim, n2]
-        "descriptors2d_db": clt_descriptors[None].to(device),  # [1, dim, n2*num_leaf]
+        # [1, dim, n2*num_leaf]
+        "descriptors2d_db": clt_descriptors[None].to(device),
         "image_size": image_size,
     }
 
@@ -171,7 +173,8 @@ def inference_core(
     # Load models and prepare data:
     matching_model, extractor_model = load_model(cfg)
     matching_2D_model = load_2D_matching_model(cfg)
-    img_lists, paths = get_default_paths(cfg, data_root, seq_dir, sfm_model_dir)
+    img_lists, paths = get_default_paths(
+        cfg, data_root, seq_dir, sfm_model_dir)
 
     # sort images
     im_ids = [int(osp.basename(i).replace(".png", "")) for i in img_lists]
@@ -286,7 +289,8 @@ def inference_core(
 
             # Detect query image(cropped) keypoints and extract descriptors:
             pred_detection = extractor_model(inp_crop)
-            pred_detection = {k: v[0].cpu().numpy() for k, v in pred_detection.items()}
+            pred_detection = {k: v[0].cpu().numpy()
+                              for k, v in pred_detection.items()}
 
             # 2D-3D matching by GATsSPG:
             inp_data = pack_data(

@@ -6,8 +6,8 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from PIL import Image
 from matplotlib.patches import Rectangle
-import os, cv2, torch
-from accelerate import Accelerator
+import os
+import torch
 
 from torch.utils.data import DataLoader
 
