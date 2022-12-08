@@ -19,3 +19,6 @@ SimpleCRF
 albumentations
 matplotlib
 loguru
+torch
+torchvision
+torchaudio
