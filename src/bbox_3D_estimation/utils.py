@@ -65,6 +65,8 @@ def predict_3D_bboxes(
     downscale_factor=0.3,
     compute_on_GPU=False,
 ):  
+    full_res_img_paths = sort_path_list(full_res_img_paths)
+    poses_paths = sort_path_list(poses_paths)
     _K, _ = data_utils.get_K(intrisics_path) 
 
     DetectorBox3D = Detector3D(_K)

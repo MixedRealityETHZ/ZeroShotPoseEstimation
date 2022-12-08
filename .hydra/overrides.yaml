@@ -1,4 +1,5 @@
-- +preprocess=sfm_spp_spg_demo
-- dataset.data_dir=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/onepose_datasets/tiger
-  tiger-annotate
-- dataset.outputs_dir=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/sfm_model/tiger
+- +experiment=test_demo
+- use_tracking=False
+- input.data_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/onepose_datasets/tiger
+  tiger-test
+- input.sfm_model_dirs=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/sfm_model/tiger

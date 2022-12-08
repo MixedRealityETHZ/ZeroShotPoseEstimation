@@ -115,12 +115,13 @@ def sfm(cfg):
         root_dir, sub_dirs = data_dir.split(" ")[0], data_dir.split(" ")[1:]
 
         # Parse image, intrinsics and poses directories:
-        img_paths, poses_paths = [], []
+        img_paths, poses_paths, full_res_img_paths = [], [], []
         for sub_dir in sub_dirs:
             seq_dir = osp.join(root_dir, sub_dir)
             img_paths += glob.glob(str(Path(seq_dir)) + "/color/*.png", recursive=True)
-            intrinsics_path += glob.glob(str(Path(seq_dir)) + "/intrinsics.txt")
+            full_res_img_paths += glob.glob(str(Path(seq_dir)) + "/color_full/*.png", recursive=True)
             poses_paths += glob.glob(str(Path(seq_dir)) + "/poses/*.txt", recursive=True)
+            intrinsics_path = str(Path(seq_dir)) + "/intrinsics.txt"
 
         # Choose less images from the list to build the sfm model
         down_img_lists = []
@@ -139,7 +140,7 @@ def sfm(cfg):
         # Begin predict 3d bboxes
         predict_3D_bboxes(
             intrisics_path=intrinsics_path,
-            full_res_img_paths=img_paths,
+            full_res_img_paths=full_res_img_paths,
             poses_paths=poses_paths,
             data_root=root_dir,
             compute_on_GPU=False,
