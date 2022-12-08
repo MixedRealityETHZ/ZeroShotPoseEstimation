@@ -1,6 +1,6 @@
 # if you have a m1 chip run the following command :
 # CONDA_SUBDIR=osx-64 conda env create -f environment.yaml
-name: onepose-DSM_env
+name: pipeline_env
 
 channels:
   - defaults

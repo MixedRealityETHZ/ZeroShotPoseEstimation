@@ -8,6 +8,8 @@ from loguru import logger
 from pathlib import Path
 from omegaconf import DictConfig
 
+from src.bbox_3D_estimation.utils import predict_3D_bboxes
+
 
 def merge_(
     anno_2d_file,
@@ -112,31 +114,42 @@ def sfm(cfg):
         logger.info(f"Processing {data_dir}.")
         root_dir, sub_dirs = data_dir.split(" ")[0], data_dir.split(" ")[1:]
 
-        # Parse image directory and downsample images:
-        img_lists = []
+        # Parse image, intrinsics and poses directories:
+        img_paths, poses_paths, full_res_img_paths = [], [], []
         for sub_dir in sub_dirs:
             seq_dir = osp.join(root_dir, sub_dir)
-            img_lists += glob.glob(str(Path(seq_dir)) + "/color/*.png", recursive=True)
+            img_paths += glob.glob(str(Path(seq_dir)) + "/color/*.png", recursive=True)
+            full_res_img_paths += glob.glob(str(Path(seq_dir)) + "/color_full/*.png", recursive=True)
+            poses_paths += glob.glob(str(Path(seq_dir)) + "/poses/*.txt", recursive=True)
+            intrinsics_path = str(Path(seq_dir)) + "/intrinsics.txt"
 
+        # Choose less images from the list to build the sfm model
         down_img_lists = []
-        for img_file in img_lists:
+        for img_file in img_paths:
             index = int(img_file.split("/")[-1].split(".")[0])
             if index % down_ratio == 0:
                 down_img_lists.append(img_file)
-        img_lists = down_img_lists
 
-        if len(img_lists) == 0:
+        if len(img_paths) == 0:
             logger.info(f"No png image in {root_dir}")
             continue
 
         obj_name = root_dir.split("/")[-1]
         outputs_dir_root = cfg.dataset.outputs_dir.format(obj_name)
 
-        #cfg.redo = True  # Debug
+        # Begin predict 3d bboxes
+        predict_3D_bboxes(
+            intrisics_path=intrinsics_path,
+            full_res_img_paths=full_res_img_paths,
+            poses_paths=poses_paths,
+            data_root=root_dir,
+            compute_on_GPU="cuda",
+            step=1,
+        )
 
         # Begin SfM and postprocess:
-        sfm_core(cfg, img_lists, outputs_dir_root)
-        postprocess(cfg, img_lists, root_dir, outputs_dir_root)
+        sfm_core(cfg, down_img_lists, outputs_dir_root)
+        postprocess(cfg, down_img_lists, root_dir, outputs_dir_root)
 
 
 def sfm_core(cfg, img_lists, outputs_dir_root):

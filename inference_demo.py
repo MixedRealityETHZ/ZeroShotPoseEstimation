@@ -13,16 +13,10 @@ import torchvision
 from loguru import logger
 from torch.utils.data import DataLoader
 from src.utils import data_utils, path_utils, eval_utils, vis_utils
-from src.utils.bbox_3D_utils import compute_3dbbox_from_sfm
 from src.utils.model_io import load_network
 from src.local_feature_2D_detector import LocalFeatureObjectDetector
-from deep_spectral_method.detection_2D_utils import UnsupBbox
-from bbox_3D_estimation.utils import (
-    Detector3D,
-    read_list_poses,
-    sort_path_list,
-    predict_3D_bboxes,
-)
+from src.deep_spectral_method.detection_2D_utils import UnsupBbox
+
 from pytorch_lightning import seed_everything
 
 """Inference & visualize"""
@@ -31,15 +25,22 @@ from src.sfm.extract_features import confs
 
 seed_everything(12345)
 
+def get_device(no_mps=True):
+    if torch.cuda.is_available():
+        device = "cuda"
+        compute_on_GPU = True
+        logger.info("Running OnePose with GPU, will it work?")
+    elif torch.backends.mps.is_available() and not no_mps:
+        device = "mps"
+        logger.info("Running OnePose with NEURAL ENGINE")
+    else:
+        device = "cpu"
+        compute_on_GPU = False
+        logger.info("Running OnePose with CPU")
 
-if torch.cuda.is_available():
-    device = "cuda"
-    compute_on_GPU = True
-    logger.info("Running OnePose with GPU, will it work?")
-else:
-    device = "cpu"
-    compute_on_GPU = False
-    logger.info("Running OnePose with CPU")
+    return device
+
+device = get_device(no_mps=True)
 
 
 def get_default_paths(cfg, data_root, data_dir, sfm_model_dir):
@@ -162,11 +163,10 @@ def inference_core(
     seq_dir,
     sfm_model_dir,
     object_det_type="detection",
-    box_3D_detect_type="image_based",
     verbose=False,
 ):
 
-    BboxPredictor = UnsupBbox(downscale_factor=0.3, on_GPU=compute_on_GPU)
+    BboxPredictor = UnsupBbox(downscale_factor=0.3, device=get_device(no_mps=True))
 
     # Load models and prepare data:
     matching_model, extractor_model = load_model(cfg)
@@ -184,39 +184,12 @@ def inference_core(
     sfm_ws_dir = paths["sfm_ws_dir"]
     anno_3d_box = data_root + "/box3d_corners.txt"
 
-    if box_3D_detect_type == "image_based" or not os.path.exists(anno_3d_box):
-        logger.info(
-            f"3d bbox estimated with {box_3D_detect_type} method, reading from file"
-        )
-
-        intriscs_path = seq_dir + "/intrinsics.txt"
-
-        K_anno, _ = data_utils.get_K(intriscs_path)
-        poses_list_anno = glob.glob(
-            os.path.join(os.getcwd(), f"{seq_dir}/poses", "*.txt")
-        )
-        poses_list_anno = sort_path_list(poses_list_anno)
-        img_lists_anno = glob.glob(
-            os.path.join(os.getcwd(), f"{seq_dir}/color_full", "*.png")
-        )
-        img_lists_anno = sort_path_list(img_lists_anno)
-
-        predict_3D_bboxes(
-            BboxPredictor=BboxPredictor,
-            img_lists=img_lists_anno,
-            poses_list=poses_list_anno,
-            K=K_anno,
-            data_root=data_root,
-            step=10,
-        )
-
-        logger.info(f"built from file {anno_3d_box}")
-        print("done")
-
+    if not os.path.exists(anno_3d_box):
+        logger.error(f"No precomputed 3d bounding boxes in: {anno_3d_box}")
     else:
         logger.info(f"reading from file {anno_3d_box}")
-
-    box3d_path = path_utils.get_3d_box_path(data_root, annotated=False)
+        box3d_path = path_utils.get_3d_box_path(data_root, annotated=False)
+        box3d = np.loadtxt(box3d_path)
 
     local_feature_obj_detector = LocalFeatureObjectDetector(
         extractor_model,
@@ -225,7 +198,7 @@ def inference_core(
         sfm_ws_dir=sfm_ws_dir,
         output_results=False,
         detect_save_dir=paths["vis_detector_dir"],
-        device=device,
+        device="cuda" if torch.cuda.is_available() else "cpu",
     )
 
     # Prepare 3D features:
@@ -245,6 +218,8 @@ def inference_core(
         clt_data["descriptors3d"], clt_data["scores3d"], idxs, num_3d, num_leaf
     )
 
+    pred_poses = {}  # {id:[pred_pose, inliers]}
+
     dataset = NormalizedDataset(
         img_lists, confs[cfg.network.detection]["preprocessing"]
     )
@@ -257,8 +232,8 @@ def inference_core(
             # Detect object:
             # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
             start = time.time()
-            if object_det_type == "features":
-                bbox, inp_crop, K_crop = local_feature_obj_detector.detect(
+            if object_det_type == "features" or id == 0:
+                bbox2d, inp_crop, K_crop = local_feature_obj_detector.detect(
                     inp,
                     img_path,
                     K,
@@ -278,6 +253,11 @@ def inference_core(
                     inp_crop
                 ).unsqueeze(0)
                 inp_crop = inp_crop.to(device)
+            else:
+                previous_frame_pose, inliers = pred_poses[id - 1]
+                _, inp_crop, K_crop, = local_feature_obj_detector.previous_pose_detect(
+                    img_path, K, previous_frame_pose, box3d
+                )
 
             if verbose:
                 logger.info(
@@ -302,26 +282,27 @@ def inference_core(
             kpts2d = pred_detection["keypoints"]
             kpts3d = inp_data["keypoints3d"][0].detach().cpu().numpy()
             confidence = pred["matching_scores0"].detach().cpu().numpy()
-            mkpts2d, mkpts3d, mconf = (
+            mkpts2d, mkpts3d, _ = (
                 kpts2d[valid],
                 kpts3d[matches[valid]],
                 confidence[valid],
             )
 
             # Estimate object pose by 2D-3D correspondences:
-            _, pose_pred_homo, inliers = eval_utils.ransac_PnP(
+            pose_pred, pose_pred_homo, inliers = eval_utils.ransac_PnP(
                 K_crop, mkpts2d, mkpts3d, scale=1000
             )
 
-        pose_opt = pose_pred_homo
+            # Store previous estimated poses:
+            pred_poses[id] = [pose_pred, inliers]
 
         # Visualize:
         vis_utils.save_demo_image(
-            pose_opt,
+            pose_pred_homo,
             K,
             image_path=img_path,
             box3d_path=box3d_path,
-            draw_box=len(inliers) > 3,
+            draw_box=len(inliers) > 0,
             save_path=osp.join(paths["vis_box_dir"], f"{id}.jpg"),
         )
 
