@@ -63,14 +63,14 @@ def predict_3D_bboxes(
     data_root,
     step=1,
     downscale_factor=0.3,
-    compute_on_GPU=False,
+    compute_on_GPU="cpu"
 ):  
     full_res_img_paths = sort_path_list(full_res_img_paths)
     poses_paths = sort_path_list(poses_paths)
     _K, _ = data_utils.get_K(intrisics_path) 
 
     DetectorBox3D = Detector3D(_K)
-    BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, on_GPU=compute_on_GPU)
+    BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, device=compute_on_GPU)
 
     for id, img_path in enumerate(tqdm(full_res_img_paths)):
         if id % step == 0 or id == 0:

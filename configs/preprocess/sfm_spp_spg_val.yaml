@@ -11,10 +11,7 @@ dataset:
     max_num_kp2d: 1000
 
     data_dir:
-        - ${scan_data_dir}/0606-tiger-others tiger-1 
-        - ${scan_data_dir}/0601-loquat-box loquat-1
-        - ${scan_data_dir}/0602-aficion-box aficion-1
-        - ${scan_data_dir}/0613-adidasshoeright-others adidasshoeright-1
+        - ${scan_data_dir}/0609-doll-others doll-1
 
     outputs_dir: ${work_dir}/data/sfm_model/{}
 
