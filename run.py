@@ -143,6 +143,7 @@ def sfm(cfg):
             full_res_img_paths=full_res_img_paths,
             poses_paths=poses_paths,
             data_root=root_dir,
+            seq_dir = seq_dir,
             compute_on_GPU="cuda",
             step=1,
         )

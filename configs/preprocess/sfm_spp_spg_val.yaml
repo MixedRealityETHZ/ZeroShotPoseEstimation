@@ -11,7 +11,7 @@ dataset:
     max_num_kp2d: 1000
 
     data_dir:
-        - ${scan_data_dir}/0609-doll-others doll-1
+        - ${scan_data_dir}/0606-tiger-others tiger-3
 
     outputs_dir: ${work_dir}/data/sfm_model/{}
 

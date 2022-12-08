@@ -17,8 +17,9 @@ class Detector3D:
         self.K = K
         self.bboxes = None
         self.poses = None
+        self.poses_list = []
 
-    def add_view(self, bbox_t: np.ndarray, pose_t: np.ndarray):
+    def add_view(self, bbox_t: np.ndarray, pose_t: np.ndarray, poses_orig: list):
         if self.bboxes is None:
             self.bboxes = bbox_t
         else:
@@ -28,6 +29,8 @@ class Detector3D:
             self.poses = pose_t
         else:
             self.poses = np.vstack((self.poses, pose_t))
+
+        self.poses_list.append(poses_orig)
 
     def detect_3D_box(self):
         object_idx = 0
@@ -50,10 +53,26 @@ class Detector3D:
         points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
 
         self.points = points
+        self.centre = centre
 
     def save_3D_box(self, data_root):
 
         np.savetxt(data_root + "/box3d_corners.txt", self.points, delimiter=" ")
+
+    def shift_centres(self):
+        shifted_poses = []
+        for pose in self.poses_list:
+            pose[0][0:3,3] -= self.centre
+            shifted_poses.append(pose)
+        self.shifted_poses = shifted_poses
+
+    def save_poses(self, seq_dir):
+        shift_pose_dir = f"{seq_dir}/poses_correct/"
+        os.makedirs(shift_pose_dir, exist_ok=True)
+        for idx, pose in enumerate(self.shifted_poses):
+            np.savetxt(f"{shift_pose_dir}{idx}.txt", pose[0], delimiter=" ")
+
+
 
 
 def predict_3D_bboxes(
@@ -61,6 +80,7 @@ def predict_3D_bboxes(
     intrisics_path,
     poses_paths,
     data_root,
+    seq_dir,
     step=1,
     downscale_factor=0.3,
     compute_on_GPU="cpu"
@@ -77,12 +97,15 @@ def predict_3D_bboxes(
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             poses = read_list_poses([poses_paths[id]])
+            poses_orig = read_list_poses_orig([poses_paths[id]])
             
             bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
-            DetectorBox3D.add_view(bbox_orig_res, poses)
+            DetectorBox3D.add_view(bbox_orig_res, poses, poses_orig)
 
     DetectorBox3D.detect_3D_box()
     DetectorBox3D.save_3D_box(data_root)
+    DetectorBox3D.shift_centres()
+    DetectorBox3D.save_poses(seq_dir)
 
 
 def sort_path_list(path_list):
@@ -99,6 +122,14 @@ def read_list_poses(list):
                 poses = pose
             else:
                 poses = np.concatenate((poses, pose), axis=0)
+    return poses
+
+
+def read_list_poses_orig(list):
+    poses = []
+    for idx, file_path in enumerate(list):
+        with open(file_path) as f_input:
+            poses.append(np.loadtxt(f_input))
     return poses
 
 

@@ -18,7 +18,7 @@ sfm_model_dir: ${data_dir}/sfm_model
 
 input:
     data_dirs:
-        - ${scan_data_dir}/0609-doll-others doll-3
+        - ${scan_data_dir}/0606-tiger-others tiger-1
  
     sfm_model_dirs:
         - ${sfm_model_dir}/0408-colorbox-box
