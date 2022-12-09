@@ -67,7 +67,7 @@ class Detector3D:
         self.shifted_poses = shifted_poses
 
     def save_poses(self, seq_dir):
-        shift_pose_dir = f"{seq_dir}/poses_correct/"
+        shift_pose_dir = f"{seq_dir}/poses_shifted/"
         os.makedirs(shift_pose_dir, exist_ok=True)
         for idx, pose in enumerate(self.shifted_poses):
             np.savetxt(f"{shift_pose_dir}{idx}.txt", pose[0], delimiter=" ")

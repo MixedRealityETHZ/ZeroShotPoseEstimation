@@ -24,10 +24,10 @@ max_num_kp3d: 2500
 
 input:
     data_dirs: 
-        - ${scan_data_dir}/0609-doll-others doll-2
+        - ${scan_data_dir}/0606-tiger-others tiger-2
         - ${scan_data_dir}/0609-doll-others doll-3
     sfm_model_dirs: 
-        - ${sfm_model_dir}/0609-doll-others
+        - ${sfm_model_dir}/0606-tiger-others
 output:
     vis_dir: ${work_dir}/runs/vis/demo
     eval_dir: ${work_dir}/runs/eval/demo
