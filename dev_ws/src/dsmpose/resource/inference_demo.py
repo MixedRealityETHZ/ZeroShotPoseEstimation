@@ -13,17 +13,10 @@ import torchvision
 from loguru import logger
 from torch.utils.data import DataLoader
 from src.utils import data_utils, path_utils, eval_utils, vis_utils
-from src.utils.bbox_3D_utils import compute_3dbbox_from_sfm
 from src.utils.model_io import load_network
-from src.local_feature_2D_detector import LocalFeatureObjectDetector
 from deep_spectral_method.detection_2D_utils import UnsupBbox
-from bbox_3D_estimation.utils import (
-    Detector3D,
-    read_list_poses,
-    sort_path_list,
-    predict_3D_bboxes,
-)
 from pytorch_lightning import seed_everything
+from src.utils.data_utils import get_K_crop_resize, get_image_crop_resize
 
 """Inference & visualize"""
 from src.datasets.normalized_dataset import NormalizedDataset
@@ -157,6 +150,34 @@ def pack_data(avg_descriptors3d, clt_descriptors, keypoints3d, detection, image_
 
     return inp_data
 
+def crop_img_by_bbox(image, bbox, K=None, crop_size=512):
+    """
+    Crop image by detect bbox
+    Input:
+        query_img_path: str,
+        bbox: np.ndarray[x0, y0, x1, y1],
+        K[optional]: 3*3
+    Output:
+        image_crop: np.ndarray[crop_size * crop_size],
+        K_crop[optional]: 3*3
+    """
+    x0, y0 = bbox[0], bbox[1]
+    x1, y1 = bbox[2], bbox[3]
+    gray_img = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+
+    resize_shape = np.array([int(y1 - y0), int(x1 - x0)])
+    if K is not None:
+        K_crop, _ = get_K_crop_resize(bbox, K, resize_shape)
+    image_crop, _ = get_image_crop_resize(gray_img, bbox, resize_shape)
+
+    bbox_new = np.array([0, 0, x1 - x0, y1 - y0])
+    resize_shape = np.array([crop_size, crop_size])
+    if K is not None:
+        K_crop, _ = get_K_crop_resize(bbox_new, K_crop, resize_shape)
+    image_crop, _ = get_image_crop_resize(image_crop, bbox_new, resize_shape)
+
+    return image_crop, K_crop if K is not None else None
+
 
 def inference_core(
     cfg,
@@ -172,7 +193,6 @@ def inference_core(
 
     # Load models and prepare data:
     matching_model, extractor_model = load_model(cfg)
-    matching_2D_model = load_2D_matching_model(cfg)
     img_lists, paths = get_default_paths(
         cfg, data_root, seq_dir, sfm_model_dir)
 
@@ -187,49 +207,7 @@ def inference_core(
     sfm_ws_dir = paths["sfm_ws_dir"]
     anno_3d_box = data_root + "/box3d_corners.txt"
 
-    if box_3D_detect_type == "image_based" or not os.path.exists(anno_3d_box):
-        logger.info(
-            f"3d bbox estimated with {box_3D_detect_type} method, reading from file"
-        )
-
-        intriscs_path = seq_dir + "/intrinsics.txt"
-
-        K_anno, _ = data_utils.get_K(intriscs_path)
-        poses_list_anno = glob.glob(
-            os.path.join(os.getcwd(), f"{seq_dir}/poses", "*.txt")
-        )
-        poses_list_anno = sort_path_list(poses_list_anno)
-        img_lists_anno = glob.glob(
-            os.path.join(os.getcwd(), f"{seq_dir}/color_full", "*.png")
-        )
-        img_lists_anno = sort_path_list(img_lists_anno)
-
-        predict_3D_bboxes(
-            BboxPredictor=BboxPredictor,
-            img_lists=img_lists_anno,
-            poses_list=poses_list_anno,
-            K=K_anno,
-            data_root=data_root,
-            step=10,
-        )
-
-        logger.info(f"built from file {anno_3d_box}")
-        print("done")
-
-    else:
-        logger.info(f"reading from file {anno_3d_box}")
-
     box3d_path = path_utils.get_3d_box_path(data_root, annotated=False)
-
-    local_feature_obj_detector = LocalFeatureObjectDetector(
-        extractor_model,
-        matching_2D_model,
-        n_ref_view=10,
-        sfm_ws_dir=sfm_ws_dir,
-        output_results=False,
-        detect_save_dir=paths["vis_detector_dir"],
-        device=device,
-    )
 
     # Prepare 3D features:
     num_leaf = cfg.num_leaf
@@ -260,27 +238,20 @@ def inference_core(
             # Detect object:
             # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
             start = time.time()
-            if object_det_type == "features":
-                bbox, inp_crop, K_crop = local_feature_obj_detector.detect(
-                    inp,
-                    img_path,
-                    K,
-                )
-            elif object_det_type == "detection":
-                image = cv2.imread(img_path)
-                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-                bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=K)
+            image = cv2.imread(img_path)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=K)
 
-                inp_crop, K_crop = local_feature_obj_detector.crop_img_by_bbox(
-                    query_img_path=img_path,
-                    bbox=bbox_orig_res,
-                    K=K,
-                    crop_size=512,
-                )
-                inp_crop = torchvision.transforms.functional.to_tensor(
-                    inp_crop
-                ).unsqueeze(0)
-                inp_crop = inp_crop.to(device)
+            inp_crop, K_crop = crop_img_by_bbox(
+                image=image,
+                bbox=bbox_orig_res,
+                K=K,
+                crop_size=512,
+            )
+            inp_crop = torchvision.transforms.functional.to_tensor(
+                inp_crop
+            ).unsqueeze(0)
+            inp_crop = inp_crop.to(device)
 
             if verbose:
                 logger.info(

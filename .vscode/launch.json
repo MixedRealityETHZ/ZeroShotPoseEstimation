@@ -1,7 +1,43 @@
 {
-  "name": "Python: Current File",
-  "type": "python",
-  "request": "launch",
-  "program": "${file}",
-  "console": "integratedTerminal"
+    // Usare IntelliSense per informazioni sui possibili attributi.
+    // Al passaggio del mouse vengono visualizzate le descrizioni degli attributi esistenti.
+    // Per altre informazioni, visitare: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: file corrente",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "holo_test",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/ale/ZeroShotPoseEstimation/dev_ws/src/dsmpose/holo_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "inference_demo",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/ale/ZeroShotPoseEstimation/dev_ws/src/dsmpose/resource/inference_demo.py",
+            "console": "integratedTerminal",
+            "args": [
+                "+experiment=test_tiger.yaml"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "inference_live_test",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/ale/ZeroShotPoseEstimation/dev_ws/src/dsmpose/pc_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+    ]
 }

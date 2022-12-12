@@ -1,2 +1,1 @@
-- +experiment=test_demo.yaml
-- use_tracking=False
+- +experiment=test_tiger.yaml

@@ -12,9 +12,8 @@ dataset:
 
     data_dir:
         - ${scan_data_dir}/0606-tiger-others tiger-1 
-        - ${scan_data_dir}/0601-loquat-box loquat-1
-        - ${scan_data_dir}/0602-aficion-box aficion-1
         - ${scan_data_dir}/0613-adidasshoeright-others adidasshoeright-1
+        - ${scan_data_dir}/0620-dinosaurcup-bottle dinosaurcup-3
 
     outputs_dir: ${work_dir}/data/sfm_model/{}
 

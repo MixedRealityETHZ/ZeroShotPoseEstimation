@@ -2,14 +2,14 @@ import torch
 import pytorch_lightning as pl
 
 from itertools import chain
-from src.models.GATsSPG_architectures.GATs_SuperGlue import GATsSuperGlue
-from src.losses.focal_loss import FocalLoss
-from src.utils.eval_utils import compute_query_pose_errors, aggregate_metrics
-from src.utils.vis_utils import draw_reprojection_pair
-from src.utils.comm import gather
-from src.models.extractors.SuperPoint.superpoint import SuperPoint
-from src.sfm.extract_features import confs
-from src.utils.model_io import load_network
+from resource.src.models.GATsSPG_architectures.GATs_SuperGlue import GATsSuperGlue
+from resource.src.losses.focal_loss import FocalLoss
+from resource.src.utils.eval_utils import compute_query_pose_errors, aggregate_metrics
+from resource.src.utils.vis_utils import draw_reprojection_pair
+from resource.src.utils.comm import gather
+from resource.src.models.extractors.SuperPoint.superpoint import SuperPoint
+from resource.src.sfm.extract_features import confs
+from resource.src.utils.model_io import load_network
 
 
 class LitModelGATsSPG(pl.LightningModule):

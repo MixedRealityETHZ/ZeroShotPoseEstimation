@@ -2,27 +2,28 @@ work_dir: ${hydra:runtime.cwd}
 data_dir: ${work_dir}/data
 print_config: true
 type: inference
-task_name: demo
+task_name: test_onepose
 num_leaf: 8
 suffix: ''
 save_demo: false
 save_wis3d: false
-use_tracking: false
+demo_root: ${data_dir}/runs/demo
 model:
-  onepose_model_path: ${work_dir}/data/models/checkpoints/onepose/GATsSPG.ckpt
-  extractor_model_path: ${work_dir}/data/models/extractors/SuperPoint/superpoint_v1.pth
-  match_model_path: ${work_dir}/data/models/matchers/SuperGlue/superglue_outdoor.pth
-scan_data_dir: ${data_dir}/onepose_datasets/val_data
-sfm_model_dir: ${data_dir}/sfm_model
+  onepose_model_path: ${data_dir}/models/checkpoints/onepose/GATsSPG.ckpt
+  extractor_model_path: ${data_dir}/models/extractors/SuperPoint/superpoint_v1.pth
+  match_model_path: ${data_dir}/models/matchers/SuperGlue/superglue_outdoor.pth
 network:
   detection: superpoint
   matching: superglue
+object_detect_mode: feature_matching
 max_num_kp3d: 2500
+scan_data_dir: ${data_dir}/onepose_datasets/val_data
+sfm_model_dir: ${data_dir}/sfm_model
 input:
   data_dirs:
   - ${scan_data_dir}/0606-tiger-others tiger-2
   sfm_model_dirs:
   - ${sfm_model_dir}/0606-tiger-others
 output:
-  vis_dir: ${work_dir}/runs/vis/demo
-  eval_dir: ${work_dir}/runs/eval/demo
+  vis_dir: ${work_dir}/runs/vis/GATsSPG
+  eval_dir: ${work_dir}/runs/eval/GATsSPG

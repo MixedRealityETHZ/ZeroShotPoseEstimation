@@ -10,7 +10,7 @@ from test_msgs.msg import BoundingBoxStamped, PosedImageStamped
 class MinimalClient(Node):
 
     def __init__(self):
-        super().__init__('minimal_client')
+        super().__init__('images_publisher')
         self.get_logger().info("Started client")
 
         self.image_publisher_ = self.create_publisher(
@@ -19,7 +19,6 @@ class MinimalClient(Node):
         timer_period = 1  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.i = 0
-
         self.image = cv2.imread("../resource/test_img.jpg")
 
     def timer_callback(self):

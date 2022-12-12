@@ -15,7 +15,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def main():
-    extract_video = True
+    extract_video = False
     plot = True
     on_GPU = True if device == "cuda" else False
     PATH = (
@@ -50,13 +50,6 @@ def main():
     )
 
     dataloader = DataLoader(dataset, batch_size=1)
-
-    # if on_GPU:
-    #     accelerator = Accelerator(mixed_precision="no", cpu=False)
-    # else:
-    #     accelerator = Accelerator(mixed_precision="no", cpu=True)
-    # model, dataloader = accelerator.prepare(model, dataloader)
-    # model = model.to(accelerator.device)
 
     # here we are creating sub plots
     for k, (images, _, _) in enumerate(tqdm(dataloader)):

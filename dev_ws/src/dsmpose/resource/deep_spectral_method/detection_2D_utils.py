@@ -28,7 +28,10 @@ class UnsupBbox:
             image, (0, 0), fx=self.downscale_factor, fy=self.downscale_factor
         )
 
-    def infer_2d_bbox(self, image, K):
+    def infer_2d_bbox(self, image, K, viz=False):
+        if viz: 
+            import matplotlib.pyplot as plt
+            from matplotlib.patches import Rectangle
         self.K = K
         image_half = self.downscale_image(image)
         image_half = self.val_transform(image_half)
@@ -43,7 +46,7 @@ class UnsupBbox:
         )
 
         eigs_dict = extract._extract_eig(
-            K=4, data_dict=feature_dict, on_gpu=self.on_GPU
+            K=2, data_dict=feature_dict, on_gpu=self.on_GPU
         )
 
         # small Segmentation
@@ -54,6 +57,23 @@ class UnsupBbox:
         # Bounding boxes
         bbox = extract.extract_bboxes(feature_dict=feature_dict, segmap=segmap)
         bbox_orig_res = (
-            np.array(bbox["bboxes_original_resolution"][0]) / self.downscale_factor
+            np.array(bbox["bboxes_original_resolution"][0]) // self.downscale_factor
         )
+
+        if viz:
+            fig = plt.figure(num=42)
+            plt.clf()
+            plt.imshow(image, alpha=0.9)
+            plt.gca().add_patch(
+                Rectangle(
+                    (bbox_orig_res[0], bbox_orig_res[1]),
+                    bbox_orig_res[2] - bbox_orig_res[0],
+                    bbox_orig_res[3] - bbox_orig_res[1],
+                    edgecolor="red",
+                    facecolor="none",
+                    lw=4,
+                )
+            )
+            plt.show(block=False)
+            plt.pause(0.0001)
         return bbox_orig_res
