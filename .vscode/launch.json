@@ -35,7 +35,15 @@
             "name": "inference_live_test",
             "type": "python",
             "request": "launch",
-            "program": "/home/ale/ZeroShotPoseEstimation/dev_ws/src/dsmpose/pc_test.py",
+            "program": "/home/ale/ZeroShotPoseEstimation/dev_ws/src/dsmpose/inference_live.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "image_saver",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/ale/ZeroShotPoseEstimation/dev_ws/src/dsmpose/image_saver.py",
             "console": "integratedTerminal",
             "justMyCode": true
         },

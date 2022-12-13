@@ -32,7 +32,7 @@ class MinimalClient(Node):
         pose = np.loadtxt(pose_path)
         quat = Rotmat.from_matrix(pose[0:3, 0:3]).as_quat()
         header = Header()
-        header.frame_id = str(np.random.randint(0, 5))
+        header.frame_id = str(0)
         header.stamp = self.get_clock().now().to_msg()
 
         msg = PosedImageStamped()

@@ -6,7 +6,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from PIL import Image
 from matplotlib.patches import Rectangle
-import os
+import cv2
 import torch
 
 from torch.utils.data import DataLoader
@@ -18,12 +18,9 @@ def main():
     extract_video = False
     plot = True
     on_GPU = True if device == "cuda" else False
-    PATH = (
-        os.getcwd()
-        + "/data/onepose_datasets/val_data/0620-dinosaurcup-bottle/dinosaurcup-4"
-    )
+    PATH = ("/home/ale/ZeroShotPoseEstimation/data/onepose_datasets/demo/demo_capture/")
     video_path = f"{PATH}/Frames.m4v"
-    images_root = f"{PATH}/extracted_images"
+    images_root = f"{PATH}/color_full"
     imlist_root = f"{PATH}/lists"
     file_txt = "/images.txt"
     model_name = "dino_vits16"
@@ -60,15 +57,18 @@ def main():
             num_heads=num_heads,
             images=images,
             on_GPU=on_GPU,
+            viz=plot
         )
 
         if plot:
             # Bounding boxes
             limits = bbox["bboxes_original_resolution"][0]
-            image_PIL = Image.open(images_root + "/" + filenames[k])
+            image = cv2.imread(images_root + "/" + filenames[k])
+            image = cv2.resize(image, (0,0), fx=0.3, fy=0.3)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             fig = plt.figure(num=42)
             plt.clf()
-            plt.imshow(image_PIL, alpha=0.9)
+            plt.imshow(image, alpha=0.9)
             plt.gca().add_patch(
                 Rectangle(
                     (limits[0], limits[1]),
@@ -83,7 +83,7 @@ def main():
             plt.pause(0.0001)
 
 
-def extract_bbox(model, patch_size, num_heads, images, on_GPU):
+def extract_bbox(model, patch_size, num_heads, images, on_GPU, viz):
     feature_dict = extract.extract_features(
         model=model,
         patch_size=patch_size,
@@ -93,7 +93,7 @@ def extract_bbox(model, patch_size, num_heads, images, on_GPU):
     )
 
     eigs_dict = extract._extract_eig(
-        K=8, data_dict=feature_dict, on_gpu=on_GPU, viz=True
+        K=8, data_dict=feature_dict, on_gpu=on_GPU, viz=viz
     )
 
     # Segmentation

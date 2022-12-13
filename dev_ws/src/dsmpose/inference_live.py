@@ -13,7 +13,7 @@ from resource.deep_spectral_method.detection_2D_utils import UnsupBbox
 from resource.src.models.GATsSPG_lightning_model import LitModelGATsSPG
 from resource.src.models.extractors.SuperPoint.superpoint import SuperPoint
 
-SUPPORTED_FORMATS = ["BGR", "RGB", "RGBA", "BGRA"]
+SUPPORTED_FORMATS = ["BGR", "RGB", "RGBA", "BGRA", "BGRA32"]
 
 def draw_3d_box(image, corners_2d, linewidth=3, color="g"):
     """Draw 3d box corners
@@ -95,7 +95,7 @@ def deserialize_image_msg(msg: PosedImageStamped):
     image = np.array(msg.data).reshape(msg.height, msg.width, msg.step)
     if str(msg.encoding).upper() == "RGBA":
         image = image[..., :3]
-    elif str(msg.encoding).upper() == "BGRA":
+    elif str(msg.encoding).upper() == "BGRA" or str(msg.encoding).upper() == "BGRA32":
         image = image[..., :3]
         msg.encoding = "BGR"
     if str(msg.encoding).upper() == "BGR":
@@ -159,10 +159,10 @@ def crop_img_by_bbox(image, bbox, K=None, crop_size=512):
 
     return image_crop, K_crop if K is not None else None
 
-class MinimalServer(Node):
+class InferenceNode(Node):
 
     def __init__(self):
-        super().__init__('minimal_server')
+        super().__init__('inference_node')
         self.get_logger().info("Started server")
 
         self.image_subscriber_ = self.create_subscription(
@@ -284,11 +284,11 @@ class MinimalServer(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    minimal_server = MinimalServer()
+    inference_node = InferenceNode()
 
-    rclpy.spin(minimal_server)
+    rclpy.spin(inference_node)
 
-    minimal_server.destroy_node()
+    inference_node.destroy_node()
     rclpy.shutdown()
 
 

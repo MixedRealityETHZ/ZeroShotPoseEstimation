@@ -33,6 +33,7 @@ class ImagesDataset(Dataset):
         full_path = Path(path) if self.root is None else self.root / path
         assert full_path.is_file(), f"Not a file: {full_path}"
         image = cv2.imread(str(full_path))
+        image = cv2.resize(image, (0,0), fx=0.3, fy=0.3)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if self.transform is not None:
             image = self.transform(image)

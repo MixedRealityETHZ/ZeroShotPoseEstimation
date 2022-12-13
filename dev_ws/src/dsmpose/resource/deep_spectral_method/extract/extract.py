@@ -901,6 +901,8 @@ def vis_eigenvectors(eigenvectors, H_patch, W_patch, H_pad, W_pad, K):
     fig = plt.figure(num=1)
     plt.clf()
     plt.imshow(eigenvector.squeeze().numpy())
+    plt.show(block=False)
+    plt.pause(0.0001)
 
 
 if __name__ == "__main__":
