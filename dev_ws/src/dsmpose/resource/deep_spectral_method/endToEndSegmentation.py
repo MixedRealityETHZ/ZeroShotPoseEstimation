@@ -43,14 +43,14 @@ def main():
     model = model.to(device)
 
     dataset = utils.ImagesDataset(
-        filenames=filenames, images_root=images_root, transform=val_transform
+        filenames=filenames, images_root=images_root, transform=val_transform, prepare_filenames=False
     )
 
     dataloader = DataLoader(dataset, batch_size=1)
 
     # here we are creating sub plots
-    for k, (images, _, _) in enumerate(tqdm(dataloader)):
-
+    for k, (images, path, idx) in enumerate(tqdm(dataloader)):
+        print(path)
         bbox = extract_bbox(
             model=model,
             patch_size=patch_size,
@@ -64,7 +64,7 @@ def main():
             # Bounding boxes
             limits = bbox["bboxes_original_resolution"][0]
             image = cv2.imread(images_root + "/" + filenames[k])
-            image = cv2.resize(image, (0,0), fx=0.3, fy=0.3)
+            #image = cv2.resize(image, (0,0), fx=0.3, fy=0.3)
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             fig = plt.figure(num=42)
             plt.clf()
