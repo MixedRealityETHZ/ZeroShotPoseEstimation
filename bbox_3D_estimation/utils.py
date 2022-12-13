@@ -77,13 +77,25 @@ def sort_path_list(path_list):
 
 
 def read_list_poses(list):
-    for idx, file_path in enumerate(list):
+    poses = np.empty((0,3))
+    for file_path in list:
         with open(file_path) as f_input:
-            pose = np.transpose(np.loadtxt(f_input)[:3, :])
-            if idx == 0:
-                poses = pose
-            else:
-                poses = np.concatenate((poses, pose), axis=0)
+            # this is world ref frame in camera ref frame (CW)
+            pose = np.loadtxt(f_input)[:3, :]
+
+            # make it homo
+            pose_homo = np.vstack([pose, [0,0,0,1]])
+
+            # invert it and apply offset
+            pose_WC = np.linalg.inv(pose_homo)
+            pose_WC[0:3,3] = pose_WC[0:3,3] + np.array([1,1,1])
+
+            # back to CW
+            pose_homo = np.linalg.inv(pose_WC)
+
+            # and no homo
+            pose_shifted = np.transpose(pose_homo[0:3, :])
+            poses = np.concatenate((poses, pose_shifted), axis=0)
     return poses
 
 
