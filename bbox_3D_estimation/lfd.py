@@ -1,360 +1,8 @@
-import numpy as np
-import glob
-import os
+""" lfd - This module contains the functions that implement the LfD algorithm.
+"""
+
 import math
-from pathlib import Path
-import collections
-from matplotlib import pyplot as plt
-import itertools
-from tqdm import tqdm
-import cv2
-from src.deep_spectral_method.detection_2D_utils import UnsupBbox
-from src.utils import data_utils
-from bbox_3D_estimation.plotting import plot_3D_scene
-import sklearn
-
-
-class Detector3D:
-    def __init__(self, K) -> None:
-        self.K = K
-        self.bboxes = None
-        self.poses = None
-        self.poses_list = []
-
-    def add_view(self, bbox_t: np.ndarray, pose_t: np.ndarray, poses_orig: list):
-        if self.bboxes is None:
-            self.bboxes = bbox_t
-        else:
-            self.bboxes = np.vstack((self.bboxes, bbox_t))
-
-        if self.poses is None:
-            self.poses = pose_t
-        else:
-            self.poses = np.vstack((self.poses, pose_t))
-
-        self.poses_list.append(poses_orig)
-
-    def detect_3D_box(self):
-        object_idx = 0
-        selected_frames = self.bboxes.shape[0]
-        self.visibility = np.ones((selected_frames, 1))
-        estQs = compute_estimates(self.bboxes, self.K, self.poses, self.visibility)
-        centre, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[object_idx])
-
-        # Possible coordinates
-        mins = [-ax for (ax) in axes]
-        maxs = [ax for (ax) in axes]
-
-        # Coordinates of the points mins and maxs
-        points = np.array(list(itertools.product(*zip(mins, maxs))))
-
-        # Points in the camera frame
-        # points = np.dot(points, R.T)
-
-        # Shift correctly the parralelepiped (we want it centered in the origin)
-        # points[:, 0:3] = np.add(centre[None, :], points[:, :3])
-
-        self.axes = axes
-        self.points = points
-        self.centre = centre
-        self.R = R
-
-        # Transformation to have coordinates centered in the bounding box (and aligned with it)
-        M = np.empty((4, 4))
-        M[:3, :3] = R
-        M[:3, 3] = centre
-        M[3, :] = [0, 0, 0, 1]
-        # print(M)
-
-        self.M = np.linalg.inv(M)
-
-
-        gt_p = np.loadtxt(f"data/onepose_datasets/val_data/0606-tiger-others/box3d_corners_GT.txt")
-
-        plot_3D_scene(
-        estQs=estQs,
-        gtQs=gt_p,
-        Ms_t=self.poses,
-        dataset="tiger",
-        save_output_images=False,
-        points=points,
-        GT_points=gt_p 
-        )
-        plt.show()
-
-
-    def save_3D_box(self, data_root):
-
-        np.savetxt(data_root + "/box3d_corners.txt", self.points, delimiter=" ")
-
-    def shift_centres(self):
-        shifted_poses = []
-        for pose in self.poses_list:
-            inverted = np.linalg.inv(pose[0])
-            inverted = np.dot(self.M, inverted)
-            original = np.linalg.inv(inverted)
-            shifted_poses.append(original)
-        self.shifted_poses = shifted_poses
-
-    def save_poses(self, seq_dir):
-        shift_pose_dir = f"{seq_dir}/poses/"
-        os.makedirs(shift_pose_dir, exist_ok=True)
-        for idx, pose in enumerate(self.shifted_poses):
-            np.savetxt(f"{shift_pose_dir}{idx}.txt", pose, delimiter=" ")
-
-
-
-def predict_3D_bboxes(
-    full_res_img_paths,
-    intrisics_path,
-    poses_paths,
-    data_root,
-    seq_dir,
-    step=1,
-    downscale_factor=0.3,
-    compute_on_GPU="cpu"
-):  
-    full_res_img_paths = sort_path_list(full_res_img_paths)
-    poses_paths = sort_path_list(poses_paths)
-    _K, _ = data_utils.get_K(intrisics_path) 
-
-    DetectorBox3D = Detector3D(_K)
-    BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, device=compute_on_GPU)
-
-    for id, img_path in enumerate(tqdm(full_res_img_paths)):
-        if id % step == 0 or id == 0:
-            image = cv2.imread(str(img_path))
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            poses = read_list_poses([poses_paths[id]])
-            poses_orig = read_list_poses_orig([poses_paths[id]])
-            
-            bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
-            DetectorBox3D.add_view(bbox_orig_res, poses, poses_orig)
-
-    DetectorBox3D.detect_3D_box()
-    DetectorBox3D.save_3D_box(data_root)
-    DetectorBox3D.shift_centres()
-    DetectorBox3D.save_poses(seq_dir)
-
-
-def sort_path_list(path_list):
-    files = {int(Path(file).stem): file for file in path_list}
-    ordered_dict = collections.OrderedDict(sorted(files.items()))
-    return list(ordered_dict.values())
-
-
-def read_list_poses(list):
-    for idx, file_path in enumerate(list):
-        with open(file_path) as f_input:
-            pose = np.transpose(np.linalg.inv(np.loadtxt(f_input))[:3, :])
-            if idx == 0:
-                poses = pose
-            else:
-                poses = np.concatenate((poses, pose), axis=0)
-            # print(poses[-1, :])
-    return poses
-
-
-def read_list_poses_orig(list):
-    poses = []
-    for idx, file_path in enumerate(list):
-        with open(file_path) as f_input:
-            poses.append(np.linalg.inv(np.loadtxt(f_input)))
-    return poses
-
-
-def read_list_box(list):
-    corpus = []
-    for file_path in list:
-        with open(file_path) as f_input:
-            line = f_input.read()
-            corpus.append([float(number) for number in line.split(",")])
-    return np.array(corpus)
-
-
-def get_data(dataset, random_downsample):
-    bbs = []
-    K = []
-    Ms_t = []
-    visibility = []
-    PATH = f"data/{dataset}"
-    box_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/bounding_boxes", "*.txt"))
-    poses_list = glob.glob(os.path.join(os.getcwd(), f"{PATH}/poses_ba", "*.txt"))
-    intrinsics = f"{PATH}/intrinsics.txt"
-
-    bbs = read_list_box(box_list)
-    old_shape = bbs.shape[0]
-    Ms_t = read_list_poses(poses_list)
-    # TODO random_downsample
-    if random_downsample:
-        random_indices = np.random.choice(bbs.shape[0], size=10, replace=False)
-        bbs = bbs[random_indices, :]
-        # print(random_indices)
-        random_indices = np.ravel(
-            [
-                random_indices,
-                old_shape + random_indices,
-                2 * old_shape + random_indices,
-                3 * old_shape + random_indices,
-            ]
-        )
-        # print(random_indices)
-        Ms_t = Ms_t[random_indices, :]
-        # print(Ms_t.shape)
-        # print(bbs)
-
-    visibility = np.ones((bbs.shape[0], 1))
-
-    with open(intrinsics) as f:
-        intr = f.readlines()
-        K = np.array(
-            [
-                [float(intr[0]), 0, float(intr[2])],
-                [0, float(intr[1]), float(intr[3])],
-                [0, 0, 1],
-            ]
-        )
-
-    return bbs, K, Ms_t, visibility
-
-
-def project_ellipsoids(Ps_t, estQs, visibility):
-    """Project the ellipsoids onto the image, producing ellipses.
-
-    :param Ps_t: Stacked and transposed projection matrices, [n_frames * 4 x 3].
-    :param estQs: Estimated ellipsoids, in dual form [n_objects x 4 x 4].
-    :param visibility: Object visibility information: [n_frames x n_objects].
-
-    :returns Cs: Ellipses in dual form [n_frames * 3 x n_objects * 3].
-    """
-
-    # Get the number of frames and the number of objects from the size of the visibility matrix.
-    n_frames = visibility.shape[0]
-    n_objects = visibility.shape[1]
-
-    Cs = np.zeros([n_frames * 3, n_objects * 3])
-    for frame in range(n_frames):
-        for obj in range(n_objects):
-            # If the estimate is valid (not NaN) and the object is visible in this frame:
-            if not ((np.isnan(estQs[obj, :, :])).any()) and visibility[frame, obj]:
-                # Transform the ellipsoid to the camera reference frame and project them.
-                P = Ps_t[frame * 4 : frame * 4 + 4, :].transpose()
-                Ctemp = np.dot(np.dot(P, estQs[obj, :, :]), P.transpose())
-                # Scale the ellipse to put it in standard form, with element [2,2] set to 1.
-                Ctemp /= Ctemp[2, 2]
-                # Write the result in the output structure.
-                Cs[frame * 3 : frame * 3 + 3, obj * 3 : obj * 3 + 3] = Ctemp
-            else:  # Propagate the NaN's of the ellipsoid to the ellipse.
-                Cs[frame * 3 : frame * 3 + 3, obj * 3 : obj * 3 + 3] = np.nan
-    return Cs
-
-
-def fit_one_ellipse_in_bb(bb):
-    """Computes the ellipse inscribed in the bounding box that is provided.
-
-    The axes of the ellipse will be aligned with the axes of the image.
-
-    :param bb: Bounding box, in the format: [X0, Y0, X1, Y1].
-
-    :returns C: Ellipse in dual form [3x3].
-    """
-
-    # Encode ellipse size (axes).
-    width = abs(bb[2] - bb[0]) / 2  # Width of the bounding box.
-    height = abs(bb[3] - bb[1]) / 2  # Height of the bounding box.
-    Ccn = np.vstack(
-        (
-            np.hstack((np.diag((1 / width ** 2, 1 / height ** 2)), np.zeros((2, 1)))),
-            np.array((0, 0, -1)),
-        )
-    )
-
-    # Encode ellipse location.
-    centre = np.array(
-        ((bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2)
-    )  # Bounding box centre.
-    P = np.vstack(
-        (np.hstack((np.eye(2, 2), centre.reshape(2, 1))), np.array((0, 0, 1,)),)
-    )
-    Cinv = P.dot(np.linalg.inv(Ccn)).dot(P.transpose())
-
-    # Force matrix to be symmetric: Cinv = (Cinv + Cinv') / 2
-    Cinv = 0.5 * (Cinv + Cinv.transpose())
-
-    # Scale ellipse so that element [2,2] is 1.
-    C = Cinv / Cinv[2, 2]
-
-    C = C * np.sign(C[0, 0] + C[1, 1])
-    return C
-
-
-def fit_ellipses_in_bbs(bbs, visibility):
-    """Computes several ellipses, in dual form, each one inscribed in one bounding box.
-
-    The axes of the ellipses will be aligned with the axes of the image.
-
-    :param bbs: Detection bounding boxes. Format: [X0, Y0, X1, Y1], size: [n_frames x n_objects * 4].
-    :param visibility:  Object visibility information: [n_frames x n_objects].
-
-    :returns: Cs - Ellipses fitted to the bounding boxes, for each image and each object, in dual form.
-                   Size: [n_frames*3 x n_objects*3]. Each ellipse is described by a [3x3] submatrix.
-    """
-
-    # Get the number of frames and the number of objects from the size of the visibility matrix.
-    n_frames = visibility.shape[0]
-    n_objects = visibility.shape[1]
-
-    Cs = np.zeros([n_frames * 3, n_objects * 3])
-    for frame in range(n_frames):
-        for obj_id in range(n_objects):
-            if visibility[frame, obj_id]:
-                C = fit_one_ellipse_in_bb(bbs[frame, obj_id * 4 : (obj_id + 1) * 4])
-                Cs[frame * 3 : (frame + 1) * 3, obj_id * 3 : (obj_id + 1) * 3] = C
-    return Cs
-
-
-def symmetric_mat_3_to_vector(C):
-    """Serialises a symmetric 3x3 matrix.
-
-    First, the elements of the first row are take in order.
-    Then, the elements of the second row, starting from the one on the diagonal.
-    Lastly, the third element of the third row is copied.
-    """
-    serialised = np.zeros(6)
-    serialised[0] = C[0, 0]
-    serialised[1] = C[0, 1]
-    serialised[2] = C[0, 2]
-    serialised[3] = C[1, 1]
-    serialised[4] = C[1, 2]
-    serialised[5] = C[2, 2]
-    return serialised
-
-
-def dual_ellipse_to_parameters(C):
-    """Computes centre, axes length and orientation of one ellipse.
-
-    :param C: Ellipse in dual form [3x3].
-
-    :returns:
-      - centre - Ellipse centre in Cartesian coordinates [2x1].
-      - axes - Ellipse axes lengths [2x1].
-      - R - Ellipse orientation [2x2].
-    """
-    if C[2, 2] > 0:
-        C = C / -C[2, 2]
-
-    centre = (-C[0:2, 2]).reshape(2, 1)
-
-    T = np.vstack((np.hstack((np.eye(2), -centre)), np.array([0, 0, 1])))
-
-    C_centre = T.dot(C).dot(T.transpose())
-    C_centre = 0.5 * (C_centre + C_centre.transpose())
-    D, V = np.linalg.eig(C_centre[0:2, 0:2])
-
-    axes = np.sqrt(abs(D))
-    R = V
-
-    return centre, axes, R
+import numpy as np
 
 
 def dual_quadric_to_ellipsoid_parameters(Q):
@@ -407,6 +55,151 @@ def dual_quadric_to_ellipsoid_parameters(Q):
     return centre, axes, R
 
 
+def dual_ellipse_to_parameters(C):
+    """Computes centre, axes length and orientation of one ellipse.
+
+    :param C: Ellipse in dual form [3x3].
+
+    :returns:
+      - centre - Ellipse centre in Cartesian coordinates [2x1].
+      - axes - Ellipse axes lengths [2x1].
+      - R - Ellipse orientation [2x2].
+    """
+    if C[2, 2] > 0:
+        C = C / -C[2, 2]
+
+    centre = (-C[0:2, 2]).reshape(2, 1)
+
+    T = np.vstack((np.hstack((np.eye(2), -centre)), np.array([0, 0, 1])))
+
+    C_centre = T.dot(C).dot(T.transpose())
+    C_centre = 0.5 * (C_centre + C_centre.transpose())
+    D, V = np.linalg.eig(C_centre[0:2, 0:2])
+
+    axes = np.sqrt(abs(D))
+    R = V
+
+    return centre, axes, R
+
+
+def fit_one_ellipse_in_bb(bb):
+    """Computes the ellipse inscribed in the bounding box that is provided.
+
+    The axes of the ellipse will be aligned with the axes of the image.
+
+    :param bb: Bounding box, in the format: [X0, Y0, X1, Y1].
+
+    :returns C: Ellipse in dual form [3x3].
+    """
+
+    # Encode ellipse size (axes).
+    width = abs(bb[2] - bb[0]) / 2  # Width of the bounding box.
+    height = abs(bb[3] - bb[1]) / 2  # Height of the bounding box.
+    Ccn = np.vstack(
+        (
+            np.hstack((np.diag((1 / width**2, 1 / height**2)), np.zeros((2, 1)))),
+            np.array((0, 0, -1)),
+        )
+    )
+
+    # Encode ellipse location.
+    centre = np.array(
+        ((bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2)
+    )  # Bounding box centre.
+    P = np.vstack(
+        (
+            np.hstack((np.eye(2, 2), centre.reshape(2, 1))),
+            np.array(
+                (
+                    0,
+                    0,
+                    1,
+                )
+            ),
+        )
+    )
+    Cinv = P.dot(np.linalg.inv(Ccn)).dot(P.transpose())
+
+    # Force matrix to be symmetric: Cinv = (Cinv + Cinv') / 2
+    Cinv = 0.5 * (Cinv + Cinv.transpose())
+
+    # Scale ellipse so that element [2,2] is 1.
+    C = Cinv / Cinv[2, 2]
+
+    C = C * np.sign(C[0, 0] + C[1, 1])
+    return C
+
+
+def fit_ellipses_in_bbs(bbs, visibility):
+    """Computes several ellipses, in dual form, each one inscribed in one bounding box.
+
+    The axes of the ellipses will be aligned with the axes of the image.
+
+    :param bbs: Detection bounding boxes. Format: [X0, Y0, X1, Y1], size: [n_frames x n_objects * 4].
+    :param visibility:  Object visibility information: [n_frames x n_objects].
+
+    :returns: Cs - Ellipses fitted to the bounding boxes, for each image and each object, in dual form.
+                   Size: [n_frames*3 x n_objects*3]. Each ellipse is described by a [3x3] submatrix.
+    """
+
+    # Get the number of frames and the number of objects from the size of the visibility matrix.
+    n_frames = visibility.shape[0]
+    n_objects = visibility.shape[1]
+
+    Cs = np.zeros([n_frames * 3, n_objects * 3])
+    for frame in range(n_frames):
+        for obj_id in range(n_objects):
+            if visibility[frame, obj_id]:
+                C = fit_one_ellipse_in_bb(bbs[frame, obj_id * 4 : (obj_id + 1) * 4])
+                Cs[frame * 3 : (frame + 1) * 3, obj_id * 3 : (obj_id + 1) * 3] = C
+    return Cs
+
+
+def vector_to_symmetric_mat_4(vec):
+    """Builds a symmetric 4x4 matrix using the elements specified in a vector.
+
+    The elements are copied first to the first row, in order, then to the second
+    row, starting from the element on the diagonal, and so on.
+    """
+    A = np.zeros((4, 4))
+    # Fill the top-right triangular matrix
+    A[0, 0] = vec[0]
+    A[0, 1] = vec[1]
+    A[0, 2] = vec[2]
+    A[0, 3] = vec[3]
+    A[1, 1] = vec[4]
+    A[1, 2] = vec[5]
+    A[1, 3] = vec[6]
+    A[2, 2] = vec[7]
+    A[2, 3] = vec[8]
+    A[3, 3] = vec[9]
+    # Fill the rest of the elements
+    A[1, 0] = vec[1]
+    A[2, 0] = vec[2]
+    A[3, 0] = vec[3]
+    A[2, 1] = vec[5]
+    A[3, 1] = vec[6]
+    A[3, 2] = vec[8]
+    return A
+
+
+def symmetric_mat_3_to_vector(C):
+    """Serialises a symmetric 3x3 matrix.
+
+    First, the elements of the first row are take in order.
+    Then, the elements of the second row, starting from the one on the diagonal.
+    Lastly, the third element of the third row is copied.
+    """
+    serialised = np.zeros(6)
+    serialised[0] = C[0, 0]
+    serialised[1] = C[0, 1]
+    serialised[2] = C[0, 2]
+    serialised[3] = C[1, 1]
+    serialised[4] = C[1, 2]
+    serialised[5] = C[2, 2]
+    return serialised
+
+
 def estimate_one_ellipsoid(Ps_t, Cs):
     """Estimates one ellipsoid given projection matrices and detection ellipses for one image sequence.
 
@@ -432,23 +225,17 @@ def estimate_one_ellipsoid(Ps_t, Cs):
     # kept like this for consistency with the name used in the paper.
 
     # Compute the B matrices and stack them into M.
-    i = 0
     for index in range(n_views):
         # Get centre and axes of current ellipse.
-        try:
-            [centre, axes, _] = dual_ellipse_to_parameters(
-                Cs[3 * index : 3 * index + 3, :]
-            )
+        [centre, axes, _] = dual_ellipse_to_parameters(Cs[3 * index : 3 * index + 3, :])
 
-            # Compute T, a transformation used to precondition the ellipse: centre the ellipse and scale the axes.
-            div_f = np.linalg.norm(axes)  # Distance of point (A,B) from origin.
+        # Compute T, a transformation used to precondition the ellipse: centre the ellipse and scale the axes.
+        div_f = np.linalg.norm(axes)  # Distance of point (A,B) from origin.
+        try:
             T = np.linalg.inv(
-                (
-                    np.vstack(
-                        (np.hstack((np.eye(2) * div_f, centre)), np.array([0, 0, 1]))
-                    )
-                )
+            (np.vstack((np.hstack((np.eye(2) * div_f, centre)), np.array([0, 0, 1]))))
             )
+        
             T_t = T.transpose()
 
             # Compute P_fr, applying T to the projection matrix.
@@ -468,8 +255,8 @@ def estimate_one_ellipsoid(Ps_t, Cs):
             M[6 * index : 6 * index + 6, 0:10] = B
             M[6 * index : 6 * index + 6, 10 + index] = -C_tv
         except:
-            i += 1
-            print(i)
+            print("encountered singular matrix")
+            #print((np.vstack((np.hstack((np.eye(2) * div_f, centre)), np.array([0, 0, 1])))))
 
     _, _, V = np.linalg.svd(M)
     w = V[-1, :]  # V is transposed respect to Matlab, so we take the last row.
@@ -577,34 +364,6 @@ def compute_B(P_fr):
     return B
 
 
-def vector_to_symmetric_mat_4(vec):
-    """Builds a symmetric 4x4 matrix using the elements specified in a vector.
-
-    The elements are copied first to the first row, in order, then to the second
-    row, starting from the element on the diagonal, and so on.
-    """
-    A = np.zeros((4, 4))
-    # Fill the top-right triangular matrix
-    A[0, 0] = vec[0]
-    A[0, 1] = vec[1]
-    A[0, 2] = vec[2]
-    A[0, 3] = vec[3]
-    A[1, 1] = vec[4]
-    A[1, 2] = vec[5]
-    A[1, 3] = vec[6]
-    A[2, 2] = vec[7]
-    A[2, 3] = vec[8]
-    A[3, 3] = vec[9]
-    # Fill the rest of the elements
-    A[1, 0] = vec[1]
-    A[2, 0] = vec[2]
-    A[3, 0] = vec[3]
-    A[2, 1] = vec[5]
-    A[3, 1] = vec[6]
-    A[3, 2] = vec[8]
-    return A
-
-
 def estimate_ellipsoids(Ps_t, input_ellipsoids_centres, inputCs, visibility):
     """Estimates one ellipsoid per object given projection matrices and detection ellipses for one image sequence.
 
@@ -686,6 +445,37 @@ def estimate_ellipsoids(Ps_t, input_ellipsoids_centres, inputCs, visibility):
     return estQs
 
 
+def project_ellipsoids(Ps_t, estQs, visibility):
+    """Project the ellipsoids onto the image, producing ellipses.
+
+    :param Ps_t: Stacked and transposed projection matrices, [n_frames * 4 x 3].
+    :param estQs: Estimated ellipsoids, in dual form [n_objects x 4 x 4].
+    :param visibility: Object visibility information: [n_frames x n_objects].
+
+    :returns Cs: Ellipses in dual form [n_frames * 3 x n_objects * 3].
+    """
+
+    # Get the number of frames and the number of objects from the size of the visibility matrix.
+    n_frames = visibility.shape[0]
+    n_objects = visibility.shape[1]
+
+    Cs = np.zeros([n_frames * 3, n_objects * 3])
+    for frame in range(n_frames):
+        for obj in range(n_objects):
+            # If the estimate is valid (not NaN) and the object is visible in this frame:
+            if not ((np.isnan(estQs[obj, :, :])).any()) and visibility[frame, obj]:
+                # Transform the ellipsoid to the camera reference frame and project them.
+                P = Ps_t[frame * 4 : frame * 4 + 4, :].transpose()
+                Ctemp = np.dot(np.dot(P, estQs[obj, :, :]), P.transpose())
+                # Scale the ellipse to put it in standard form, with element [2,2] set to 1.
+                Ctemp /= Ctemp[2, 2]
+                # Write the result in the output structure.
+                Cs[frame * 3 : frame * 3 + 3, obj * 3 : obj * 3 + 3] = Ctemp
+            else:  # Propagate the NaN's of the ellipsoid to the ellipse.
+                Cs[frame * 3 : frame * 3 + 3, obj * 3 : obj * 3 + 3] = np.nan
+    return Cs
+
+
 def compute_estimates(bbs, K, Ms_t, visibility):
     """Estimate one ellipsoid per object given detection bounding boxes and camera parameters.
 
@@ -736,4 +526,7 @@ def compute_estimates(bbs, K, Ms_t, visibility):
         Ps_t, first_step_ellipsoids_centres, inputCs, visibility
     )
 
-    return estQs_second_step
+    # Project the estimated ellipsoids onto the images.
+    estCs = project_ellipsoids(Ps_t, estQs_second_step, visibility)
+
+    return inputCs, estCs, estQs_second_step
