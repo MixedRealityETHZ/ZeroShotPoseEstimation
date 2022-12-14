@@ -69,18 +69,18 @@ class Detector3D:
         self.M = np.linalg.inv(M)
 
 
-        gt_p = np.loadtxt(f"data/onepose_datasets/val_data/0606-tiger-others/box3d_corners_GT.txt")
+        # gt_p = np.loadtxt(f"data/onepose_datasets/val_data/0606-tiger-others/box3d_corners_GT.txt")
 
-        plot_3D_scene(
-        estQs=estQs,
-        gtQs=gt_p,
-        Ms_t=self.poses,
-        dataset="tiger",
-        save_output_images=False,
-        points=points,
-        GT_points=gt_p 
-        )
-        plt.show()
+        # plot_3D_scene(
+        # estQs=estQs,
+        # gtQs=gt_p,
+        # Ms_t=self.poses,
+        # dataset="tiger",
+        # save_output_images=False,
+        # points=points,
+        # GT_points=gt_p 
+        # )
+        # plt.show()
 
 
     def save_3D_box(self, data_root):
@@ -146,7 +146,7 @@ def sort_path_list(path_list):
 def read_list_poses(list):
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
-            pose = np.transpose(np.linalg.inv(np.loadtxt(f_input))[:3, :])
+            pose = np.transpose(np.linalg.inv(np.loadtxt(f_input))[:3, :]) #TODO poses are inverted when from hololens
             if idx == 0:
                 poses = pose
             else:
