@@ -2,3 +2,4 @@
 - dataset.data_dir=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/onepose_datasets/tiger
   tiger-annotate
 - dataset.outputs_dir=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/sfm_model/tiger
+- +hololens=true

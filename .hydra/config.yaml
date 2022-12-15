@@ -19,3 +19,4 @@ sfm:
   covis_num: 10
   rotation_thresh: 50
 disable_lightning_logs: true
+hololens: true

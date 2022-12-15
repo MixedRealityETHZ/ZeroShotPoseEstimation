@@ -113,9 +113,10 @@ hydra:
     - dataset.data_dir=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/onepose_datasets/tiger
       tiger-annotate
     - dataset.outputs_dir=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/sfm_model/tiger
+    - +hololens=true
   job:
     name: run
-    override_dirname: +preprocess=sfm_spp_spg_demo,dataset.data_dir=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/onepose_datasets/tiger
+    override_dirname: +hololens=true,+preprocess=sfm_spp_spg_demo,dataset.data_dir=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/onepose_datasets/tiger
       tiger-annotate,dataset.outputs_dir=/Users/PELLERITO/Desktop/mixed_reality_code/OnePose/data/sfm_model/tiger
     id: ???
     num: ???

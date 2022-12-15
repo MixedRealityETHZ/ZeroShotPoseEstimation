@@ -107,10 +107,11 @@ def merge_anno(cfg):
         json.dump(instance, f)
 
 
-def sfm(cfg, crop_images=True):
+def sfm(cfg):
     """Reconstruct and postprocess sparse object point cloud, and store point cloud features"""
     data_dirs = cfg.dataset.data_dir
     down_ratio = cfg.sfm.down_ratio
+    crop_images = True if cfg.hololens else False
     data_dirs = [data_dirs] if isinstance(data_dirs, str) else data_dirs
 
     for data_dir in data_dirs:
@@ -129,10 +130,10 @@ def sfm(cfg, crop_images=True):
 
             paths['final_intrin_file'] = intrinsics_path
             paths['reproj_box_dir'] = seq_dir + "/reproj_box/"
+            paths['crop_img_root'] = seq_dir + "/color/"
             paths['intrin_dir'] = seq_dir + "/intrin/"
             paths['img_list'] = full_res_img_paths
             paths['M_dir'] = seq_dir + "/modified_poses/"
-            paths['crop_img_root'] = seq_dir + "/color/"
 
 
         obj_name = root_dir.split("/")[-1]
@@ -146,13 +147,12 @@ def sfm(cfg, crop_images=True):
                 poses_paths=poses_paths,
                 data_root=root_dir,
                 device="cpu",
-                root_2d_bbox=paths['reproj_box_dir'],
                 step=1,
                 hololens=cfg.hololens,
+                root_2d_bbox=paths['reproj_box_dir'],
             )
 
-        # Crop images and save them if color folder is empty
-        crop_images=True
+        # Crop images and save them if you have MINIMAL folder structure
         if crop_images:
             img_paths = parse_images(paths, downsample_rate=1, hw=512)
         else:
@@ -169,8 +169,7 @@ def sfm(cfg, crop_images=True):
             logger.info(f"No png image in {root_dir}")
             continue
 
-        # Choose less images from the list to build the sfm model
-
+        # Choose less images from the list, to build the sfm model
         down_img_lists = []
         for img_file in img_paths:
             index = int(img_file.split("/")[-1].split(".")[0])
