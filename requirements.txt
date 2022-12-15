@@ -24,3 +24,4 @@ SimpleCRF
 albumentations
 loguru
 h5py
+lmfit
