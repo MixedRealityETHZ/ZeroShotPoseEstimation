@@ -102,7 +102,7 @@ class Detector3D:
         for idx, pose in enumerate(self.shifted_poses):
             np.savetxt(f"{shift_pose_dir}{idx}.txt", pose, delimiter=" ")
 
-    def save_dimentions(self, data_root):
+    def save_dimensions(self, data_root):
         np.savetxt(data_root + "/box3d_dimensions.txt", self.axes, delimiter=" ")
 
 
@@ -138,6 +138,7 @@ def predict_3D_bboxes(
     DetectorBox3D.save_3D_box(data_root)
     DetectorBox3D.shift_centres()
     DetectorBox3D.save_poses(seq_dir)
+    DetectorBox3D.save_dimensions(data_root)
 
 
 def sort_path_list(path_list):
