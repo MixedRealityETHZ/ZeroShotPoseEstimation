@@ -4,13 +4,17 @@ type: sfm
 work_dir: ${hydra:runtime.cwd}
 redo: True
 
-scan_data_dir: ${work_dir}/data/onepose_datasets/val_data
+# scan_data_dir: ${work_dir}/data/onepose_datasets/val_data
+scan_data_dir: ${work_dir}/data/costum_datasets/test
 
 dataset:
     max_num_kp3d: 2500
     max_num_kp2d: 1000
 
     data_dir:
+        # - ${scan_data_dir}/0606-tiger-others tiger-2
+        - ${scan_data_dir}/demo_capture demo-1
+    outputs_dir: ${work_dir}/data/sfm_model/{}
         - ${scan_data_dir}/0609-doll-others doll-1
 
     outputs_dir: ${work_dir}/data/sfm_model/{}

@@ -10,6 +10,8 @@ from tqdm import tqdm
 import cv2
 from src.deep_spectral_method.detection_2D_utils import UnsupBbox
 from src.utils import data_utils
+from bbox_3D_estimation.plotting import plot_3D_scene
+import sklearn
 
 
 class Detector3D:
@@ -17,8 +19,9 @@ class Detector3D:
         self.K = K
         self.bboxes = None
         self.poses = None
+        self.poses_list = []
 
-    def add_view(self, bbox_t: np.ndarray, pose_t: np.ndarray):
+    def add_view(self, bbox_t: np.ndarray, pose_t: np.ndarray, poses_orig: list):
         if self.bboxes is None:
             self.bboxes = bbox_t
         else:
@@ -28,6 +31,8 @@ class Detector3D:
             self.poses = pose_t
         else:
             self.poses = np.vstack((self.poses, pose_t))
+
+        self.poses_list.append(poses_orig)
 
     def detect_3D_box(self):
         object_idx = 0
@@ -44,16 +49,61 @@ class Detector3D:
         points = np.array(list(itertools.product(*zip(mins, maxs))))
 
         # Points in the camera frame
-        points = np.dot(points, R.T)
+        # points = np.dot(points, R.T)
 
-        # Shift correctly the parralelepiped
-        points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
+        # Shift correctly the parralelepiped (we want it centered in the origin)
+        # points[:, 0:3] = np.add(centre[None, :], points[:, :3])
 
+        self.axes = axes
         self.points = points
+        self.centre = centre
+        self.R = R
+
+        # Transformation to have coordinates centered in the bounding box (and aligned with it)
+        M = np.empty((4, 4))
+        M[:3, :3] = R
+        M[:3, 3] = centre
+        M[3, :] = [0, 0, 0, 1]
+        # print(M)
+
+        self.M = np.linalg.inv(M)
+
+
+        # gt_p = np.loadtxt(f"data/onepose_datasets/val_data/0606-tiger-others/box3d_corners_GT.txt")
+
+        # plot_3D_scene(
+        # estQs=estQs,
+        # gtQs=gt_p,
+        # Ms_t=self.poses,
+        # dataset="tiger",
+        # save_output_images=False,
+        # points=points,
+        # GT_points=gt_p 
+        # )
+        # plt.show()
+
 
     def save_3D_box(self, data_root):
-
         np.savetxt(data_root + "/box3d_corners.txt", self.points, delimiter=" ")
+
+    def shift_centres(self):
+        shifted_poses = []
+        for pose in self.poses_list:
+            inverted = np.linalg.inv(pose[0])
+            inverted = np.dot(self.M, inverted)
+            original = np.linalg.inv(inverted)
+            shifted_poses.append(original)
+        self.shifted_poses = shifted_poses
+
+    def save_poses(self, seq_dir):
+        """Saves poses in the OnePose format (which is inverted respect to the Hololens format)"""
+        shift_pose_dir = f"{seq_dir}/poses_shifted/"
+        os.makedirs(shift_pose_dir, exist_ok=True)
+        for idx, pose in enumerate(self.shifted_poses):
+            np.savetxt(f"{shift_pose_dir}{idx}.txt", pose, delimiter=" ")
+
+    def save_dimentions(self, data_root):
+        np.savetxt(data_root + "/box3d_dimensions.txt", self.axes, delimiter=" ")
 
 
 def predict_3D_bboxes(
@@ -61,6 +111,7 @@ def predict_3D_bboxes(
     intrisics_path,
     poses_paths,
     data_root,
+    seq_dir,
     step=1,
     downscale_factor=0.3,
     compute_on_GPU="cpu"
@@ -76,13 +127,16 @@ def predict_3D_bboxes(
         if id % step == 0 or id == 0:
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            poses = read_list_poses([poses_paths[id]])
+            poses = read_list_poses([poses_paths[id]], Hololens=True)
+            poses_orig = read_list_poses_orig([poses_paths[id]])
             
             bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
-            DetectorBox3D.add_view(bbox_orig_res, poses)
+            DetectorBox3D.add_view(bbox_orig_res, poses, poses_orig)
 
     DetectorBox3D.detect_3D_box()
     DetectorBox3D.save_3D_box(data_root)
+    DetectorBox3D.shift_centres()
+    DetectorBox3D.save_poses(seq_dir)
 
 
 def sort_path_list(path_list):
@@ -91,14 +145,25 @@ def sort_path_list(path_list):
     return list(ordered_dict.values())
 
 
-def read_list_poses(list):
+def read_list_poses(list, Hololens=False):
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
-            pose = np.transpose(np.loadtxt(f_input)[:3, :])
+            if Hololens:
+                pose = np.transpose(np.linalg.inv(np.loadtxt(f_input))[:3, :])  # TODO poses are inverted when from hololens
+            else:
+                pose = np.transpose(np.loadtxt(f_input)[:3, :])
             if idx == 0:
                 poses = pose
             else:
                 poses = np.concatenate((poses, pose), axis=0)
+    return poses
+
+
+def read_list_poses_orig(list):
+    poses = []
+    for idx, file_path in enumerate(list):
+        with open(file_path) as f_input:
+            poses.append(np.linalg.inv(np.loadtxt(f_input)))
     return poses
 
 
