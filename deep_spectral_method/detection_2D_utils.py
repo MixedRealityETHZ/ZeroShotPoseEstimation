@@ -2,6 +2,7 @@ from .extract import extract
 from .extract import extract_utils as utils
 import numpy as np
 import cv2
+import lmfit #New library
 
 # TODO: extend this class to load dino model on the constructor
 
@@ -14,6 +15,7 @@ class UnsupBbox():
         self.downscale_factor = downscale_factor
         self.on_GPU = on_GPU
         self.model, self.val_transform, self.patch_size, self.num_heads = utils.get_model(self.model_name)
+        self.fitting_model = lmfit.models.Gaussian2dModel() #Model to fit the gaussian curve
 
     def downscale_image(self, image):
         return cv2.resize(image, (0, 0), fx=self.downscale_factor, fy=self.downscale_factor)
@@ -30,11 +32,30 @@ class UnsupBbox():
 
         eigs_dict = extract._extract_eig(K=4, data_dict=feature_dict, on_gpu=self.on_GPU)
 
-        # small Segmentation
-        segmap = extract.extract_single_region_segmentations(feature_dict=feature_dict, eigs_dict=eigs_dict)
+        # small Segmentation, use of fitting curve
+        segmap= extract.gaussian_fitting(
+        feature_dict=feature_dict,
+        eigs_dict=eigs_dict,
+        fitting_model=self.fitting_model
+        )
 
-        # Bounding boxes
-        bbox = extract.extract_bboxes(feature_dict=feature_dict, segmap=segmap)
+        bbox = extract.extract_bboxes(
+        feature_dict=feature_dict,
+        segmap=segmap,
+        )
+
+        if not bbox['bboxes']:
+            # Segmentation
+            segmap = extract.extract_single_region_segmentations(
+            feature_dict=feature_dict,
+            eigs_dict=eigs_dict,
+            )
+            bbox = extract.extract_bboxes(
+            feature_dict=feature_dict,
+            segmap=segmap,
+            )
+
+
         bbox_orig_res = bbox["bboxes_original_resolution"][0]
         return bbox_orig_res
 

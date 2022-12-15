@@ -339,14 +339,12 @@ def gaussian_fitting(
 
     #This happens when the eigenvector is flipped
 
-    #if (np.max(eigenvector) < minv + (maxv-minv) / 2) or (np.max(eigenvector) < 0.01):
     if (np.max(eigenvector) < 0.01):
         #Get the lower 10%
         ei = np.sort(eigenvector)[int(0.10 * W_patch * H_patch)]
         eigenvector[eigenvector > ei] = 0.
 
         eigs = eigenvector.copy().reshape(H_patch, W_patch)
-
         graph_2 = (np.array(eigs) / np.min((eigs)))
         
         mult_x = graph_2 * Xin
@@ -358,7 +356,7 @@ def gaussian_fitting(
         params['centerx'].set(value = xsum, min = 0, max = W_patch)
         params['centery'].set(value = ysum, min = 0, max = H_patch)
         
-        #Graph cut here
+        
         params['amplitude'].set(np.min(eigenvector))
         flag = True
     
