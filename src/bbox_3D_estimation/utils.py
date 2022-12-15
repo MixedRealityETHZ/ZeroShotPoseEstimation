@@ -84,7 +84,6 @@ class Detector3D:
 
 
     def save_3D_box(self, data_root):
-
         np.savetxt(data_root + "/box3d_corners.txt", self.points, delimiter=" ")
 
     def shift_centres(self):
@@ -97,11 +96,14 @@ class Detector3D:
         self.shifted_poses = shifted_poses
 
     def save_poses(self, seq_dir):
-        shift_pose_dir = f"{seq_dir}/poses/"
+        """Saves poses in the OnePose format (which is inverted respect to the Hololens format)"""
+        shift_pose_dir = f"{seq_dir}/poses_shifted/"
         os.makedirs(shift_pose_dir, exist_ok=True)
         for idx, pose in enumerate(self.shifted_poses):
             np.savetxt(f"{shift_pose_dir}{idx}.txt", pose, delimiter=" ")
 
+    def save_dimentions(self, data_root):
+        np.savetxt(data_root + "/box3d_dimensions.txt", self.axes, delimiter=" ")
 
 
 def predict_3D_bboxes(
@@ -125,7 +127,7 @@ def predict_3D_bboxes(
         if id % step == 0 or id == 0:
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            poses = read_list_poses([poses_paths[id]])
+            poses = read_list_poses([poses_paths[id]], Hololens=True)
             poses_orig = read_list_poses_orig([poses_paths[id]])
             
             bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
@@ -143,15 +145,17 @@ def sort_path_list(path_list):
     return list(ordered_dict.values())
 
 
-def read_list_poses(list):
+def read_list_poses(list, Hololens=False):
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
-            pose = np.transpose(np.linalg.inv(np.loadtxt(f_input))[:3, :]) #TODO poses are inverted when from hololens
+            if Hololens:
+                pose = np.transpose(np.linalg.inv(np.loadtxt(f_input))[:3, :])  # TODO poses are inverted when from hololens
+            else:
+                pose = np.transpose(np.loadtxt(f_input)[:3, :])
             if idx == 0:
                 poses = pose
             else:
                 poses = np.concatenate((poses, pose), axis=0)
-            # print(poses[-1, :])
     return poses
 
 
