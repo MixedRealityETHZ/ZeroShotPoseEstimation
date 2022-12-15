@@ -15,6 +15,9 @@ dataset:
         # - ${scan_data_dir}/0606-tiger-others tiger-2
         - ${scan_data_dir}/demo_capture demo-1
     outputs_dir: ${work_dir}/data/sfm_model/{}
+        - ${scan_data_dir}/0609-doll-others doll-1
+
+    outputs_dir: ${work_dir}/data/sfm_model/{}
 
 network:
     detection: superpoint

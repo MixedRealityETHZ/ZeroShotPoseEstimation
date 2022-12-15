@@ -14,6 +14,7 @@ network:
 
 n_ref_view: 15
 scan_data_dir: ${data_dir}/onepose_datasets/val_data
+scan_data_dir: ${data_dir}/onepose_datasets/val_data
 sfm_model_dir: ${data_dir}/sfm_model
 
 input:

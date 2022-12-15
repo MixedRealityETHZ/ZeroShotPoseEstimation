@@ -10,6 +10,8 @@ from omegaconf import DictConfig
 
 from src.bbox_3D_estimation.utils import predict_3D_bboxes
 
+from src.bbox_3D_estimation.utils import predict_3D_bboxes
+
 
 def merge_(
     anno_2d_file,
@@ -118,11 +120,15 @@ def sfm(cfg):
         img_paths, poses_paths, full_res_img_paths = [], [], []
         for sub_dir in sub_dirs:
             seq_dir = osp.join(root_dir, sub_dir)
-            img_paths += glob.glob(str(Path(seq_dir)) + "/color/*.png", recursive=True)
-            full_res_img_paths += glob.glob(str(Path(seq_dir)) + "/color_full/*.png", recursive=True)
+            img_paths += glob.glob(str(Path(seq_dir)) + "/copaths += glob.glob(str(Path(seq_dir)) + "/color/*.png", recursor/*.png", recursive=True)
+            full_reve=True)
+            full_res_img_pa_img_pathhs += glob.glob(str(Path(seq_dir)) + "/color_full_full/*.png", recursive=True)
+            poses_paths += glob.glob(str(Path(seq_dir)) + "/poses/*.txt", recursive=True)
+            intrinsics_path = str(Path(seq_dir)) + "/intrinsics.txt"
             poses_paths += glob.glob(str(Path(seq_dir)) + "/poses/*.txt", recursive=True)
             intrinsics_path = str(Path(seq_dir)) + "/intrinsics.txt"
 
+        # Choose less images from the list to build the sfm model
         # Choose less images from the list to build the sfm model
         down_img_lists = []
         for img_file in img_paths:
@@ -149,8 +155,8 @@ def sfm(cfg):
         )
 
         # Begin SfM and postprocess:
-        sfm_core(cfg, down_img_lists, outputs_dir_root)
-        postprocess(cfg, down_img_lists, root_dir, outputs_dir_root)
+        sfm_core(cfg, down_down_img_lists, outputs_dir_root)
+        postprocess(cfg, down_down_img_lists, root_dir, outputs_dir_root)
 
 
 def sfm_core(cfg, img_lists, outputs_dir_root):
