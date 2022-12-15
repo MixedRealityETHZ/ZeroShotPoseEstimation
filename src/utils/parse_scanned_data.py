@@ -237,7 +237,7 @@ def parse_images(paths, downsample_rate=5, hw=512):
 
         np.savetxt(osp.join(paths['M_dir'], '{}.txt'.format(index)), trans_crop_to_full)
         np.savetxt(save_intrin_path, K_crop)
-        cv2.imwrite(crop_img_file, image_crop)
+        cv2.imwrite(crop_img_file, cv2.cvtColor(image_crop, cv2.COLOR_RGB2BGR))
 
     return crop_img_paths
 
