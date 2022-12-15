@@ -10,7 +10,7 @@ from tqdm import tqdm
 import cv2
 from src.deep_spectral_method.detection_2D_utils import UnsupBbox
 from src.utils import data_utils
-from bbox_3D_estimation.plotting import plot_3D_scene
+from src.bbox_3D_estimation.plotting import plot_3D_scene
 import sklearn
 
 
@@ -114,7 +114,8 @@ def predict_3D_bboxes(
     seq_dir,
     step=1,
     downscale_factor=0.3,
-    compute_on_GPU="cpu"
+    compute_on_GPU="cpu",
+    hololens=False
 ):  
     full_res_img_paths = sort_path_list(full_res_img_paths)
     poses_paths = sort_path_list(poses_paths)
@@ -127,7 +128,7 @@ def predict_3D_bboxes(
         if id % step == 0 or id == 0:
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            poses = read_list_poses([poses_paths[id]], Hololens=True)
+            poses = read_list_poses([poses_paths[id]], hololens=hololens)
             poses_orig = read_list_poses_orig([poses_paths[id]])
             
             bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
@@ -145,10 +146,10 @@ def sort_path_list(path_list):
     return list(ordered_dict.values())
 
 
-def read_list_poses(list, Hololens=False):
+def read_list_poses(list, hololens=False):
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
-            if Hololens:
+            if hololens:
                 pose = np.transpose(np.linalg.inv(np.loadtxt(f_input))[:3, :])  # TODO poses are inverted when from hololens
             else:
                 pose = np.transpose(np.loadtxt(f_input)[:3, :])
