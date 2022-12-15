@@ -107,7 +107,7 @@ def merge_anno(cfg):
         json.dump(instance, f)
 
 
-def sfm(cfg):
+def sfm(cfg, crop_images=True):
     """Reconstruct and postprocess sparse object point cloud, and store point cloud features"""
     data_dirs = cfg.dataset.data_dir
     down_ratio = cfg.sfm.down_ratio
@@ -159,9 +159,11 @@ def sfm(cfg):
             img_paths = []
             for sub_dir in sub_dirs:
                 img_paths += glob.glob(str(Path(seq_dir)) + "/color/*.png", recursive=True)
+            if not os.path.exists(paths['intrin_dir']):
+                os.makedirs(paths['intrin_dir'])
                 K, _ = data_utils.get_K(intrinsics_path) 
-            for index, _ in enumerate(img_paths):
-                np.savetxt(paths['intrin_dir'] + f"{index}.txt", K)
+                for index, _ in enumerate(img_paths):
+                    np.savetxt(paths['intrin_dir'] + f"{index}.txt", K)
 
         if len(img_paths) == 0:
             logger.info(f"No png image in {root_dir}")
