@@ -108,21 +108,22 @@ class Detector3D:
 
 def predict_3D_bboxes(
     full_res_img_paths,
-    intrisics_path,
+    intrinsics_path,
     poses_paths,
     data_root,
     seq_dir,
     step=1,
     downscale_factor=0.3,
-    compute_on_GPU="cpu",
+    device="cpu",
+    root_2d_bbox=None,
     hololens=False
 ):  
     full_res_img_paths = sort_path_list(full_res_img_paths)
     poses_paths = sort_path_list(poses_paths)
-    _K, _ = data_utils.get_K(intrisics_path) 
+    _K, _ = data_utils.get_K(intrinsics_path) 
 
     DetectorBox3D = Detector3D(_K)
-    BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, device=compute_on_GPU)
+    BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, device=device)
 
     for id, img_path in enumerate(tqdm(full_res_img_paths)):
         if id % step == 0 or id == 0:
@@ -132,7 +133,11 @@ def predict_3D_bboxes(
             poses_orig = read_list_poses_orig([poses_paths[id]])
             
             bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
-            DetectorBox3D.add_view(bbox_orig_res, poses, poses_orig)
+            if root_2d_bbox is not None:
+                if not os.path.exists(root_2d_bbox):
+                    os.makedirs(root_2d_bbox)
+                BboxPredictor.save_2d_bbox(file_path = root_2d_bbox + f"{id}.txt")
+                DetectorBox3D.add_view(bbox_orig_res, poses)
 
     DetectorBox3D.detect_3D_box()
     DetectorBox3D.save_3D_box(data_root)

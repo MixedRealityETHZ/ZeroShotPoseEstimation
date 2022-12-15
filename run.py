@@ -2,6 +2,7 @@ import json
 import os
 import glob
 import hydra
+import numpy as np
 
 import os.path as osp
 from loguru import logger
@@ -9,8 +10,8 @@ from pathlib import Path
 from omegaconf import DictConfig
 
 from src.bbox_3D_estimation.utils import predict_3D_bboxes
-
-from src.bbox_3D_estimation.utils import predict_3D_bboxes
+from src.utils.parse_scanned_data import parse_images
+from src.utils import data_utils
 
 
 def merge_(
@@ -109,6 +110,7 @@ def merge_anno(cfg):
 def sfm(cfg):
     """Reconstruct and postprocess sparse object point cloud, and store point cloud features"""
     data_dirs = cfg.dataset.data_dir
+    #cfg.sfm.down_ratio = 1
     down_ratio = cfg.sfm.down_ratio
     data_dirs = [data_dirs] if isinstance(data_dirs, str) else data_dirs
 
@@ -117,15 +119,54 @@ def sfm(cfg):
         root_dir, sub_dirs = data_dir.split(" ")[0], data_dir.split(" ")[1:]
 
         # Parse image, intrinsics and poses directories:
-        img_paths, poses_paths, full_res_img_paths = [], [], []
+        poses_paths, full_res_img_paths = [], []
+        paths = {}
         for sub_dir in sub_dirs:
-            seq_dir = osp.join(root_dir, sub_dir)
-            img_paths += glob.glob(str(Path(seq_dir)) + "/color/*.png", recursive=True)
-            full_res_img_paths += glob.glob(str(Path(seq_dir)) + "/color_full/*.png", recursive=True)
-            poses_paths += glob.glob(str(Path(seq_dir)) + "/poses/*.txt", recursive=True)
-            intrinsics_path = str(Path(seq_dir)) + "/intrinsics.txt"
-            poses_paths += glob.glob(str(Path(seq_dir)) + "/poses/*.txt", recursive=True)
-            intrinsics_path = str(Path(seq_dir)) + "/intrinsics.txt"
+            seq_dir = str(Path(osp.join(root_dir, sub_dir)))
+
+            full_res_img_paths += glob.glob(seq_dir + "/color_full/*.png", recursive=True)
+            poses_paths += glob.glob(seq_dir + "/poses/*.txt", recursive=True)
+            intrinsics_path = seq_dir + "/intrinsics.txt"
+
+            paths['final_intrin_file'] = intrinsics_path
+            paths['reproj_box_dir'] = seq_dir + "/reproj_box/"
+            paths['intrin_dir'] = seq_dir + "/intrin/"
+            paths['img_list'] = full_res_img_paths
+            paths['M_dir'] = seq_dir + "/modified_poses/"
+            paths['crop_img_root'] = seq_dir + "/color/"
+
+
+        obj_name = root_dir.split("/")[-1]
+        outputs_dir_root = cfg.dataset.outputs_dir.format(obj_name)
+
+        # Begin predict 3d bboxes
+        if not os.path.exists(root_dir + "/box3d_corners.txt"):
+            predict_3D_bboxes(
+                intrinsics_path=intrinsics_path,
+                full_res_img_paths=full_res_img_paths,
+                poses_paths=poses_paths,
+                data_root=root_dir,
+                device="cpu",
+                root_2d_bbox=paths['reproj_box_dir'],
+                step=1,
+                hololens=cfg.hololens,
+            )
+
+        # Crop images and save them if color folder is empty
+        crop_images=True
+        if crop_images:
+            img_paths = parse_images(paths, downsample_rate=1, hw=512)
+        else:
+            img_paths = []
+            for sub_dir in sub_dirs:
+                img_paths += glob.glob(str(Path(seq_dir)) + "/color/*.png", recursive=True)
+                K, _ = data_utils.get_K(intrinsics_path) 
+            for index, _ in enumerate(img_paths):
+                np.savetxt(paths['intrin_dir'] + f"{index}.txt", K)
+
+        if len(img_paths) == 0:
+            logger.info(f"No png image in {root_dir}")
+            continue
 
         # Choose less images from the list to build the sfm model
 
@@ -134,25 +175,6 @@ def sfm(cfg):
             index = int(img_file.split("/")[-1].split(".")[0])
             if index % down_ratio == 0:
                 down_img_lists.append(img_file)
-
-        if len(img_paths) == 0:
-            logger.info(f"No png image in {root_dir}")
-            continue
-
-        obj_name = root_dir.split("/")[-1]
-        outputs_dir_root = cfg.dataset.outputs_dir.format(obj_name)
-
-        # Begin predict 3d bboxes
-        predict_3D_bboxes(
-            intrisics_path=intrinsics_path,
-            full_res_img_paths=full_res_img_paths,
-            poses_paths=poses_paths,
-            data_root=root_dir,
-            seq_dir = seq_dir,
-            compute_on_GPU="cuda",
-            step=1,
-            hololens=cfg.hololens
-        )
 
         # Begin SfM and postprocess:
         sfm_core(cfg, down_img_lists, outputs_dir_root)
