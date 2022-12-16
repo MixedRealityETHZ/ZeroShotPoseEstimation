@@ -21,7 +21,7 @@ class Detector3D:
         self.poses = None
         self.poses_list = []
 
-    def add_view(self, bbox_t: np.ndarray, pose_t: np.ndarray, poses_orig: list):
+    def add_view(self, bbox_t: np.ndarray, pose_t: np.ndarray):
         if self.bboxes is None:
             self.bboxes = bbox_t
         else:
@@ -32,14 +32,12 @@ class Detector3D:
         else:
             self.poses = np.vstack((self.poses, pose_t))
 
-        self.poses_list.append(poses_orig)
-
     def detect_3D_box(self, plot_3dbbox=False):
         object_idx = 0
         selected_frames = self.bboxes.shape[0]
         self.visibility = np.ones((selected_frames, 1))
         estQs = compute_estimates(self.bboxes, self.K, self.poses, self.visibility)
-        centre, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[object_idx])
+        center, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[object_idx])
 
         # Possible coordinates
         mins = [-ax for (ax) in axes]
@@ -50,17 +48,8 @@ class Detector3D:
 
         self.axes = axes
         self.points = points
-        self.centre = centre
+        self.center = center
         self.R = R
-
-        # Transformation to have coordinates centered in the bounding box (and aligned with it)
-        M = np.empty((4, 4))
-        #M[:3, :3] = R
-        M[:3, :3] = np.eye(3)
-        M[:3, 3] = centre
-        M[3, :] = [0, 0, 0, 1]
-
-        self.M = np.linalg.inv(M)
 
         if plot_3dbbox:
             gt_p = np.loadtxt(f"data/onepose_datasets/val_data/0606-tiger-others/box3d_corners_GT.txt")
@@ -74,34 +63,17 @@ class Detector3D:
                 GT_points=gt_p 
             )
             plt.show()
-
+        
+        return center, R
 
     def save_3D_box(self, data_root):
         np.savetxt(data_root + "/box3d_corners.txt", self.points, delimiter=" ")
-
-    def shift_centres(self):
-        shifted_poses = []
-        for pose in self.poses_list:
-            inverted = np.linalg.inv(pose[0])
-            inverted = np.dot(self.M, inverted)
-            original = np.linalg.inv(inverted)
-            shifted_poses.append(original)
-        self.shifted_poses = shifted_poses
-
-    def save_poses(self, seq_dir, hololens):
-        """Saves poses in the OnePose format (which is inverted respect to the Hololens format)"""
-        shift_pose_dir = f"{seq_dir}/poses_shifted/"
-        if hololens:
-            shift_pose_dir = f"{seq_dir}/poses/" # Overwrite poses
-        os.makedirs(shift_pose_dir, exist_ok=True)
-        for idx, pose in enumerate(self.shifted_poses):
-            np.savetxt(f"{shift_pose_dir}{idx}.txt", pose, delimiter=" ")
 
     def save_dimensions(self, data_root):
         np.savetxt(data_root + "/box3d_dimensions.txt", self.axes, delimiter=" ")
 
 
-def predict_3D_bboxes(
+def predict_3D_bboxes_wrapper(
     full_res_img_paths,
     intrinsics_path,
     poses_paths,
@@ -125,20 +97,52 @@ def predict_3D_bboxes(
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             poses = read_list_poses([poses_paths[id]], hololens=hololens)
-            poses_orig = read_list_poses_orig([poses_paths[id]])
             
             bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
             if root_2d_bbox is not None:
                 if not os.path.exists(root_2d_bbox):
                     os.makedirs(root_2d_bbox)
                 BboxPredictor.save_2d_bbox(file_path = root_2d_bbox + f"{id}.txt")
-                DetectorBox3D.add_view(bbox_t=bbox_orig_res, pose_t=poses, poses_orig=poses_orig)
+                DetectorBox3D.add_view(bbox_t=bbox_orig_res, pose_t=poses)
 
-    DetectorBox3D.detect_3D_box()
+    center, R = DetectorBox3D.detect_3D_box()
     DetectorBox3D.save_3D_box(data_root)
-    DetectorBox3D.shift_centres()
-    DetectorBox3D.save_poses(seq_dir, hololens)
     DetectorBox3D.save_dimensions(data_root)
+    return center, R
+
+
+
+def shift_poses(poses_list, M_inv):
+    shifted_poses = []
+    for pose in poses_list:
+        inverted = np.linalg.inv(pose)
+        inverted = np.dot(M_inv, inverted)
+        original = np.linalg.inv(inverted)
+        shifted_poses.append(original)
+    return shifted_poses
+
+def save_poses(seq_dir, shifted_poses, hololens):
+    """Saves poses in the OnePose format (which is inverted respect to the Hololens format)"""
+    shift_pose_dir = f"{seq_dir}/poses_shifted/"
+    if hololens:
+        shift_pose_dir = f"{seq_dir}/poses/" # Overwrite original poses
+    
+    os.makedirs(shift_pose_dir, exist_ok=True)
+    for idx, pose in enumerate(shifted_poses):
+        np.savetxt(f"{shift_pose_dir}{idx}.txt", pose, delimiter=" ")
+
+
+def shift_poses_to_object_center(poses_paths, center, R, seq_dir, hololens):
+    # Transformation to have coordinates centered in the bounding box (and aligned with it)
+    M = np.empty((4, 4))
+    M[:3, :3] = R
+    M[:3, 3] = center
+    M[3, :] = [0, 0, 0, 1]
+    M_inv = np.linalg.inv(M)
+
+    poses_list = read_poses_store_to_list(poses_paths)
+    shifted_poses = shift_poses(poses_list, M_inv)
+    save_poses(seq_dir, shifted_poses, hololens)
 
 
 def sort_path_list(path_list):
@@ -148,13 +152,16 @@ def sort_path_list(path_list):
 
 
 def read_list_poses(list, hololens=False):
+    poses = []
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
+
+            transform = np.loadtxt(f_input)
             if hololens:
-                # TODO poses are inverted when from hololens
-                pose = np.transpose(np.linalg.inv(np.loadtxt(f_input))[:3, :])
+                pose = np.transpose(np.linalg.inv(transform)[:3, :])
             else:
-                pose = np.transpose(np.loadtxt(f_input)[:3, :])
+                pose = np.transpose(transform[:3, :])
+            
             if idx == 0:
                 poses = pose
             else:
@@ -162,17 +169,17 @@ def read_list_poses(list, hololens=False):
     return poses
 
 
-def read_list_poses_orig(list):
+def read_poses_store_to_list(paths):
     poses = []
-    for idx, file_path in enumerate(list):
+    for file_path in paths:
         with open(file_path) as f_input:
             poses.append(np.linalg.inv(np.loadtxt(f_input)))
     return poses
 
 
-def read_list_box(list):
+def read_list_box(paths):
     corpus = []
-    for file_path in list:
+    for file_path in paths:
         with open(file_path) as f_input:
             line = f_input.read()
             corpus.append([float(number) for number in line.split(",")])

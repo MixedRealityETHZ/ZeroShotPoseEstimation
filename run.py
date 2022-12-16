@@ -10,7 +10,7 @@ from loguru import logger
 from pathlib import Path
 from omegaconf import DictConfig
 
-from src.bbox_3D_estimation.utils import predict_3D_bboxes
+from src.bbox_3D_estimation.utils import predict_3D_bboxes_wrapper, shift_poses_to_object_center
 from src.utils.parse_scanned_data import parse_images
 from src.utils import data_utils
 
@@ -141,7 +141,7 @@ def sfm(cfg):
 
         # Begin predict 3d bboxes
         if not os.path.exists(root_dir + "/box3d_corners.txt"):
-            predict_3D_bboxes(
+            center_3d_box, R_3d_box = predict_3D_bboxes_wrapper(
                 intrinsics_path=intrinsics_path,
                 full_res_img_paths=full_res_img_paths,
                 poses_paths=poses_paths,
@@ -152,6 +152,14 @@ def sfm(cfg):
                 hololens=cfg.hololens,
                 root_2d_bbox=paths['reproj_box_dir'],
             )
+        
+            # Shift poses
+            shift_poses_to_object_center(
+                    poses_paths=poses_paths, 
+                    center=center_3d_box, 
+                    R=R_3d_box, 
+                    seq_dir=seq_dir, 
+                    hololens=cfg.hololens)
 
         # Crop images and save them if you have MINIMAL folder structure
         if crop_images:
