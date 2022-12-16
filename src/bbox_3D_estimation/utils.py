@@ -137,7 +137,7 @@ def predict_3D_bboxes(
                 if not os.path.exists(root_2d_bbox):
                     os.makedirs(root_2d_bbox)
                 BboxPredictor.save_2d_bbox(file_path = root_2d_bbox + f"{id}.txt")
-                DetectorBox3D.add_view(bbox_orig_res, poses)
+                DetectorBox3D.add_view(bbox_t=bbox_orig_res, pose_t=poses, poses_orig=poses_orig)
 
     DetectorBox3D.detect_3D_box()
     DetectorBox3D.save_3D_box(data_root)

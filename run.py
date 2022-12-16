@@ -2,6 +2,7 @@ import json
 import os
 import glob
 import hydra
+import torch
 import numpy as np
 
 import os.path as osp
@@ -121,19 +122,18 @@ def sfm(cfg):
         # Parse image, intrinsics and poses directories:
         poses_paths, full_res_img_paths = [], []
         paths = {}
-        for sub_dir in sub_dirs:
-            seq_dir = str(Path(osp.join(root_dir, sub_dir)))
+        seq_dir = str(Path(osp.join(root_dir, sub_dirs[0])))
 
-            full_res_img_paths += glob.glob(seq_dir + "/color_full/*.png", recursive=True)
-            poses_paths += glob.glob(seq_dir + "/poses/*.txt", recursive=True)
-            intrinsics_path = seq_dir + "/intrinsics.txt"
+        full_res_img_paths += glob.glob(seq_dir + "/color_full/*.png", recursive=True)
+        poses_paths += glob.glob(seq_dir + "/poses/*.txt", recursive=True)
+        intrinsics_path = seq_dir + "/intrinsics.txt"
 
-            paths['final_intrin_file'] = intrinsics_path
-            paths['reproj_box_dir'] = seq_dir + "/reproj_box/"
-            paths['crop_img_root'] = seq_dir + "/color/"
-            paths['intrin_dir'] = seq_dir + "/intrin/"
-            paths['img_list'] = full_res_img_paths
-            paths['M_dir'] = seq_dir + "/modified_poses/"
+        paths['final_intrin_file'] = intrinsics_path
+        paths['reproj_box_dir'] = seq_dir + "/reproj_box/"
+        paths['crop_img_root'] = seq_dir + "/color/"
+        paths['intrin_dir'] = seq_dir + "/intrin/"
+        paths['img_list'] = full_res_img_paths
+        paths['M_dir'] = seq_dir + "/modified_poses/"
 
 
         obj_name = root_dir.split("/")[-1]
@@ -146,7 +146,8 @@ def sfm(cfg):
                 full_res_img_paths=full_res_img_paths,
                 poses_paths=poses_paths,
                 data_root=root_dir,
-                device="cpu",
+                seq_dir=seq_dir,
+                device="cuda" if torch.cuda.is_available() else "cpu",
                 step=1,
                 hololens=cfg.hololens,
                 root_2d_bbox=paths['reproj_box_dir'],
