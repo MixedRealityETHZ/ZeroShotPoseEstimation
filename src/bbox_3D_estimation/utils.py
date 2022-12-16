@@ -95,9 +95,11 @@ class Detector3D:
             shifted_poses.append(original)
         self.shifted_poses = shifted_poses
 
-    def save_poses(self, seq_dir):
+    def save_poses(self, seq_dir, hololens):
         """Saves poses in the OnePose format (which is inverted respect to the Hololens format)"""
         shift_pose_dir = f"{seq_dir}/poses_shifted/"
+        if hololens:
+            shift_pose_dir = f"{seq_dir}/poses/" # Overwrite poses
         os.makedirs(shift_pose_dir, exist_ok=True)
         for idx, pose in enumerate(self.shifted_poses):
             np.savetxt(f"{shift_pose_dir}{idx}.txt", pose, delimiter=" ")
@@ -142,7 +144,7 @@ def predict_3D_bboxes(
     DetectorBox3D.detect_3D_box()
     DetectorBox3D.save_3D_box(data_root)
     DetectorBox3D.shift_centres()
-    DetectorBox3D.save_poses(seq_dir)
+    DetectorBox3D.save_poses(seq_dir, hololens)
     DetectorBox3D.save_dimensions(data_root)
 
 

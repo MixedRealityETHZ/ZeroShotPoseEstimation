@@ -157,9 +157,7 @@ def sfm(cfg):
         if crop_images:
             img_paths = parse_images(paths, downsample_rate=1, hw=512)
         else:
-            img_paths = []
-            for sub_dir in sub_dirs:
-                img_paths += glob.glob(str(Path(seq_dir)) + "/color/*.png", recursive=True)
+            img_paths = glob.glob(str(Path(seq_dir)) + "/color/*.png", recursive=True)
             if not os.path.exists(paths['intrin_dir']):
                 os.makedirs(paths['intrin_dir'])
                 K, _ = data_utils.get_K(intrinsics_path) 
