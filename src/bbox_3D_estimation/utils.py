@@ -96,6 +96,8 @@ def predict_3D_bboxes_wrapper(
         if id % step == 0 or id == 0:
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+            # if Hololens True then we invert the poses after reading them
             poses = read_list_poses([poses_paths[id]], hololens=hololens)
             
             bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
@@ -110,12 +112,11 @@ def predict_3D_bboxes_wrapper(
     DetectorBox3D.save_dimensions(data_root)
     return center, R
 
-
-
 def shift_poses(poses_list, M_inv):
     shifted_poses = []
     for pose in poses_list:
-        inverted = np.linalg.inv(pose)
+        #inverted = np.linalg.inv(pose)
+        inverted = pose
         inverted = np.dot(M_inv, inverted)
         original = np.linalg.inv(inverted)
         shifted_poses.append(original)
