@@ -177,7 +177,7 @@ def sfm(cfg):
 
         # Begin SfM and postprocess:
         sfm_core(cfg, down_img_lists, outputs_dir_root)
-        postprocess(cfg, down_img_lists, root_dir, outputs_dir_root)
+        postprocess(cfg, down_img_lists, root_dir, outputs_dir_root, filter_with_3d_bbox=False)
 
 
 def sfm_core(cfg, img_lists, outputs_dir_root):
@@ -218,7 +218,7 @@ def sfm_core(cfg, img_lists, outputs_dir_root):
         )
 
         # Reconstruct 3D point cloud with known image poses:
-        generate_empty.generate_model(img_lists, empty_dir)
+        generate_empty.generate_model(img_lists, empty_dir, do_ba=True)
         triangulation.main(
             deep_sfm_dir,
             empty_dir,
@@ -227,16 +227,13 @@ def sfm_core(cfg, img_lists, outputs_dir_root):
             feature_out,
             matches_out,
             image_dir=None,
-            skip_geometric_verification=True,
+            skip_geometric_verification=False,
         )
 
 
-def postprocess(cfg, img_lists, root_dir, outputs_dir_root):
+def postprocess(cfg, img_lists, root_dir, outputs_dir_root, filter_with_3d_bbox=True):
     """Filter points and average feature"""
     from src.sfm.postprocess import filter_points, feature_process, filter_tkl
-
-    # Probably here is where they use the first box
-    bbox_path = osp.join(root_dir, "box3d_corners.txt")
 
     # Construct output directory structure:
     outputs_dir = osp.join(
@@ -255,8 +252,12 @@ def postprocess(cfg, img_lists, root_dir, outputs_dir_root):
         model_path, points_count_list, track_length, outputs_dir
     )  # For visualization only
 
+    # Probably here is where they use the first box
+    bbox_path = osp.join(root_dir, "box3d_corners.txt")
+
     # Leverage the selected feature track length threshold and 3D BBox to filter 3D points:
-    xyzs, points_idxs = filter_points.filter_3d(model_path, track_length, bbox_path)
+    mask_filtering = not filter_with_3d_bbox
+    xyzs, points_idxs = filter_points.filter_3d(model_path, track_length, bbox_path, mask_filtering=mask_filtering)
     # Merge 3d points by distance between points
     merge_xyzs, merge_idxs = filter_points.merge(xyzs, points_idxs, dist_threshold=1e-3)
 

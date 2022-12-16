@@ -34,7 +34,7 @@ class Detector3D:
 
         self.poses_list.append(poses_orig)
 
-    def detect_3D_box(self):
+    def detect_3D_box(self, plot_3dbbox=False):
         object_idx = 0
         selected_frames = self.bboxes.shape[0]
         self.visibility = np.ones((selected_frames, 1))
@@ -48,12 +48,6 @@ class Detector3D:
         # Coordinates of the points mins and maxs
         points = np.array(list(itertools.product(*zip(mins, maxs))))
 
-        # Points in the camera frame
-        # points = np.dot(points, R.T)
-
-        # Shift correctly the parralelepiped (we want it centered in the origin)
-        # points[:, 0:3] = np.add(centre[None, :], points[:, :3])
-
         self.axes = axes
         self.points = points
         self.centre = centre
@@ -61,26 +55,25 @@ class Detector3D:
 
         # Transformation to have coordinates centered in the bounding box (and aligned with it)
         M = np.empty((4, 4))
-        M[:3, :3] = R
+        #M[:3, :3] = R
+        M[:3, :3] = np.eye(3)
         M[:3, 3] = centre
         M[3, :] = [0, 0, 0, 1]
-        # print(M)
 
         self.M = np.linalg.inv(M)
 
-
-        # gt_p = np.loadtxt(f"data/onepose_datasets/val_data/0606-tiger-others/box3d_corners_GT.txt")
-
-        # plot_3D_scene(
-        # estQs=estQs,
-        # gtQs=gt_p,
-        # Ms_t=self.poses,
-        # dataset="tiger",
-        # save_output_images=False,
-        # points=points,
-        # GT_points=gt_p 
-        # )
-        # plt.show()
+        if plot_3dbbox:
+            gt_p = np.loadtxt(f"data/onepose_datasets/val_data/0606-tiger-others/box3d_corners_GT.txt")
+            plot_3D_scene(
+                estQs=estQs,
+                gtQs=gt_p,
+                Ms_t=self.poses,
+                dataset="tiger",
+                save_output_images=False,
+                points=points,
+                GT_points=gt_p 
+            )
+            plt.show()
 
 
     def save_3D_box(self, data_root):
@@ -158,7 +151,8 @@ def read_list_poses(list, hololens=False):
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
             if hololens:
-                pose = np.transpose(np.linalg.inv(np.loadtxt(f_input))[:3, :])  # TODO poses are inverted when from hololens
+                # TODO poses are inverted when from hololens
+                pose = np.transpose(np.linalg.inv(np.loadtxt(f_input))[:3, :])
             else:
                 pose = np.transpose(np.loadtxt(f_input)[:3, :])
             if idx == 0:

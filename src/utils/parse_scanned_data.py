@@ -190,7 +190,7 @@ def parse_video(paths, downsample_rate=5, bbox_3d_homo=None, hw=512, AR_annotati
         index += 1
     cap.release()
 
-def parse_images(paths, downsample_rate=5, hw=512):
+def parse_images(paths, downsample_rate=5, hw=512, save_rotations=False):
     orig_intrin_file = paths['final_intrin_file']
     crop_img_root = paths['crop_img_root']
     intrin_dir = paths['intrin_dir']
@@ -229,13 +229,14 @@ def parse_images(paths, downsample_rate=5, hw=512):
         K_crop, K_crop_homo = data_utils.get_K_crop_resize(box_new, K_crop, resize_shape)
         image_crop, trans2 = data_utils.get_image_crop_resize(image_crop, box_new, resize_shape)
 
-        trans_full_to_crop = trans2 @ trans1
-        trans_crop_to_full = np.linalg.inv(trans_full_to_crop)
-
         crop_img_file = crop_img_root + f"{index}.png"
         crop_img_paths.append(crop_img_file)
 
-        np.savetxt(osp.join(paths['M_dir'], '{}.txt'.format(index)), trans_crop_to_full)
+        if save_rotations:
+            trans_full_to_crop = trans2 @ trans1
+            trans_crop_to_full = np.linalg.inv(trans_full_to_crop)
+            np.savetxt(osp.join(paths['M_dir'], '{}.txt'.format(index)), trans_crop_to_full)
+
         np.savetxt(save_intrin_path, K_crop)
         cv2.imwrite(crop_img_file, cv2.cvtColor(image_crop, cv2.COLOR_RGB2BGR))
 
