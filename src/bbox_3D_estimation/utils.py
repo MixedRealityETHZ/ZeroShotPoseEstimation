@@ -11,7 +11,6 @@ import cv2
 from src.deep_spectral_method.detection_2D_utils import UnsupBbox
 from src.utils import data_utils
 from src.bbox_3D_estimation.plotting import plot_3D_scene
-import sklearn
 
 
 class Detector3D:
@@ -52,15 +51,21 @@ class Detector3D:
         self.R = R
 
         if plot_3dbbox:
-            gt_p = np.loadtxt(f"data/onepose_datasets/val_data/0606-tiger-others/box3d_corners_GT.txt")
+            new_pose = self.poses.copy()
+            for i in range(self.poses.shape[0]):
+                if i%4==0 or i==0:
+                    curr_pose = new_pose[i:i+4,:]
+                    inv_pose = invert_pose(curr_pose)
+                    new_pose[i:i+4,:] = inv_pose
+
             plot_3D_scene(
                 estQs=estQs,
-                gtQs=gt_p,
+                gtQs=None,
                 Ms_t=self.poses,
                 dataset="tiger",
                 save_output_images=False,
                 points=points,
-                GT_points=gt_p 
+                GT_points=None 
             )
             plt.show()
         
@@ -98,8 +103,13 @@ def predict_3D_bboxes_wrapper(
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
             # if Hololens True then we invert the poses after reading them
-            poses = read_list_poses([poses_paths[id]], hololens=hololens)
-            
+            original_pose = read_list_poses([poses_paths[id]])
+            if hololens:
+                right_h_pose = convert_left_to_right_hand_pose(original_pose)
+                poses = invert_pose(right_h_pose)
+            else:
+                poses = original_pose
+
             bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
             if root_2d_bbox is not None:
                 if not os.path.exists(root_2d_bbox):
@@ -115,8 +125,8 @@ def predict_3D_bboxes_wrapper(
 def shift_poses(poses_list, M_inv):
     shifted_poses = []
     for pose in poses_list:
-        #inverted = np.linalg.inv(pose)
-        inverted = pose
+        #inverted = pose
+        inverted = np.linalg.inv(pose)
         inverted = np.dot(M_inv, inverted)
         original = np.linalg.inv(inverted)
         shifted_poses.append(original)
@@ -140,7 +150,7 @@ def shift_poses_to_object_center(poses_paths, center, R, seq_dir, hololens):
     M[:3, 3] = center
     M[3, :] = [0, 0, 0, 1]
     M_inv = np.linalg.inv(M)
-
+    # read poses
     poses_list = read_poses_store_to_list(poses_paths)
     shifted_poses = shift_poses(poses_list, M_inv)
     save_poses(seq_dir, shifted_poses, hololens)
@@ -152,22 +162,49 @@ def sort_path_list(path_list):
     return list(ordered_dict.values())
 
 
-def read_list_poses(list, hololens=False):
+def read_list_poses(list):
     poses = []
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
-
             transform = np.loadtxt(f_input)
-            if hololens:
-                pose = np.transpose(np.linalg.inv(transform)[:3, :])
-            else:
-                pose = np.transpose(transform[:3, :])
-            
+            pose = np.transpose(transform[:3, :])
             if idx == 0:
                 poses = pose
             else:
                 poses = np.concatenate((poses, pose), axis=0)
     return poses
+
+def invert_pose(pose: np.ndarray):
+    # untranspose pose
+    curr_pose = pose.T
+    # add line of 0001
+    trasp_pose = np.vstack((curr_pose, np.array([0,0,0,1])))
+    #invert
+    inverted_pose = np.linalg.inv(trasp_pose)
+    # back transpose
+    back_trasp_pose = inverted_pose.T
+    #return trasposed version without 0001
+    return back_trasp_pose[:,0:3]
+
+def convert_left_to_right_hand_pose(original_pose):
+    pose = original_pose.copy().T
+    # Extract rotation matrix and translation vector from left-handed pose T
+    R = pose[:3, :3]
+    t = pose[:3, 3]
+
+    # Negate first element of translation vector
+    t[0] = -t[0]
+
+    # Negate first column of rotation matrix
+    R[:, 0] = -R[:, 0]
+
+    # Construct right-handed pose T'
+    T_prime = np.eye(4)
+    T_prime[:3, :3] = R
+    T_prime[:3, 3] = t
+
+    return T_prime.T[:,:3]
+
 
 
 def read_poses_store_to_list(paths):
@@ -213,10 +250,7 @@ def get_data(dataset, random_downsample):
                 3 * old_shape + random_indices,
             ]
         )
-        # print(random_indices)
         Ms_t = Ms_t[random_indices, :]
-        # print(Ms_t.shape)
-        # print(bbs)
 
     visibility = np.ones((bbs.shape[0], 1))
 

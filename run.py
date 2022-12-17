@@ -140,7 +140,7 @@ def sfm(cfg):
         outputs_dir_root = cfg.dataset.outputs_dir.format(obj_name)
 
         # Begin predict 3d bboxes
-        if not os.path.exists(root_dir + "/box3d_corners.txt"):
+        if not os.path.exists(root_dir + "/box3d_corners.txt") or cfg.redo_3d_bbox:
             center_3d_box, R_3d_box = predict_3D_bboxes_wrapper(
                 intrinsics_path=intrinsics_path,
                 full_res_img_paths=full_res_img_paths,
@@ -152,14 +152,15 @@ def sfm(cfg):
                 hololens=cfg.hololens,
                 root_2d_bbox=paths['reproj_box_dir'],
             )
-        
+
             # Shift poses
-            shift_poses_to_object_center(
-                    poses_paths=poses_paths, 
-                    center=center_3d_box, 
-                    R=R_3d_box, 
-                    seq_dir=seq_dir, 
-                    hololens=cfg.hololens)
+            if cfg.hololens:
+                shift_poses_to_object_center(
+                        poses_paths=poses_paths, 
+                        center=center_3d_box, 
+                        R=R_3d_box, 
+                        seq_dir=seq_dir, 
+                        hololens=cfg.hololens)
 
         # Crop images and save them if you have MINIMAL folder structure
         if crop_images:
