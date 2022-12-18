@@ -3,12 +3,17 @@ import torch
 import rclpy
 import torchvision
 import numpy as np
+import matplotlib.pyplot as plt
+
 from rclpy.node import Node
+from geometry_msgs.msg import Pose
+from scipy.spatial.transform import Rotation as Rotmat
+from test_msgs.msg import BoundingBoxStamped, PosedImageStamped
+
 from resource.src.sfm.extract_features import confs
 from resource.src.utils.model_io import load_network
 from resource.src.utils.eval_utils import ransac_PnP
 from resource.src.utils.data_utils import get_K_crop_resize, get_image_crop_resize, pad_features3d_random, build_features3d_leaves
-from test_msgs.msg import BoundingBoxStamped, PosedImageStamped
 from resource.deep_spectral_method.detection_2D_utils import UnsupBbox
 from resource.src.models.GATsSPG_lightning_model import LitModelGATsSPG
 from resource.src.models.extractors.SuperPoint.superpoint import SuperPoint
@@ -85,12 +90,21 @@ def save_demo_image(
 
 def deserialize_image_msg(msg: PosedImageStamped):
 
+    def pose_msg_to_homo(pose: Pose):
+        quat = np.array([pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w])
+        rotmat = Rotmat.from_quat(quat).as_matrix() @ np.array([0,0,1,0,1,0,-1,0,0]).reshape((3,3))
+        center = np.array([pose.position.x, pose.position.y, pose.position.z])
+        pose_mat = np.vstack([rotmat.T, center]).T
+        pose_mat = np.vstack([pose_mat, np.array([0,0,0,1])])
+
+        return pose_mat
+
     if str(msg.encoding).upper() not in SUPPORTED_FORMATS:
         raise ValueError(
             f"Unknown image encoding. Supported encodings: {SUPPORTED_FORMATS}"
         )
 
-    pose = msg.pose
+    pose = pose_msg_to_homo(msg.pose)
     intrinsics = msg.intrinsics.reshape(3, 3)
     image = np.array(msg.data).reshape(msg.height, msg.width, msg.step)
     if str(msg.encoding).upper() == "RGBA":
@@ -189,12 +203,14 @@ class InferenceNode(Node):
             "avg_anno_path": f"{self.data_dir}/sfm_model/demo/outputs_superpoint_superglue/anno/anno_3d_average.npz",
             "clt_anno_path": f"{self.data_dir}/sfm_model/demo/outputs_superpoint_superglue/anno/anno_3d_collect.npz",
             "idxs_path": f"{self.data_dir}/sfm_model/demo/outputs_superpoint_superglue/anno/idxs.npy",
-            "box3d_path": f"{self.data_dir}/sfm_model/demo/box3d_corners.txt"
+            "box3d_path": f"{self.data_dir}/sfm_model/demo/box3d_corners.txt",
+            "demo_inference_save_path": f"{self.data_dir}/onepose_datasets/demo/demo_inference/inference_pic/"
         }
 
         self.matching_model, self.extractor_model = load_model(self.cfg)
         self.onepose_input = self.onepose_input_setup()
         self.box3d = np.loadtxt(self.cfg["box3d_path"])
+        self.image_index = 0
 
     def image_callback(self, msg: PosedImageStamped):
         time = self.get_clock().now().to_msg()
@@ -202,11 +218,12 @@ class InferenceNode(Node):
         image, intrinsics, pose = deserialize_image_msg(msg)
         res_bbox = self.process_image(image, intrinsics, pose)
         res_bbox.header = msg.header
+        res_bbox.header.frame_id = "0"
         self.bbox_publisher_.publish(res_bbox)
 
     def process_image(self, image, intrinsics, pose) -> BoundingBoxStamped:
         with torch.no_grad():
-            bbox = self.detector.infer_2d_bbox(image=image, K=2, viz=True)
+            bbox = self.detector.infer_2d_bbox(image=image, K=2, viz=False)
             image_cropped, K_crop = crop_img_by_bbox(image=image, bbox=bbox, K=intrinsics)
 
             image_cropped = torchvision.transforms.functional.to_tensor(
@@ -234,23 +251,42 @@ class InferenceNode(Node):
                     confidence[valid],
                 )
 
-            _, pose_pred_homo, inliers = ransac_PnP(
+            _, pose_rel_homo, inliers = ransac_PnP(
                     K_crop, mkpts2d, mkpts3d, scale=1000
                 )
 
+        pose_pred_world = pose @ np.linalg.inv(pose_rel_homo)
+        rotquat = Rotmat.from_matrix(pose_pred_world[0:3, 0:3]).as_quat()
+        transl = pose_pred_world[0:3,3]
+
         demo_img = save_demo_image (
             box3d=self.box3d,
-            pose_pred=pose_pred_homo,
+            pose_pred=pose_rel_homo,
             K=intrinsics,
             image=image,
             draw_box=len(inliers) > 3
         )
 
+        self.get_logger().info(f"total error: {pose_rel_homo[0:3,3] - pose[0:3,3]}")
+        
+        path = self.cfg["demo_inference_save_path"]
+        demo_img = cv2.cvtColor(demo_img, cv2.COLOR_BGR2RGB)
+        plt.clf()
+        plt.imshow(demo_img)
+        plt.savefig(f"{path}{self.image_index}.jpg")
+        self.image_index += 1
+
         result = BoundingBoxStamped()
-        result.pose.position.x = bbox[0]
-        result.pose.position.y = bbox[1]
-        result.height, result.width = bbox[3]-bbox[1], bbox[2]-bbox[0]
-        result.length = 0.0
+        result.pose.position.x = transl[0]
+        result.pose.position.y = transl[1]
+        result.pose.position.z = transl[2]
+        result.pose.orientation.x = rotquat[0]
+        result.pose.orientation.y = rotquat[1]
+        result.pose.orientation.z = rotquat[2]
+        result.pose.orientation.w = rotquat[3]
+        result.height = 0.1
+        result.width = 0.1
+        result.length = 0.1
 
         return result
 
