@@ -52,28 +52,15 @@ class Detector3D:
         self.points = points
         self.centre = centre
         self.R = R
+        self.estQs = estQs
 
         # Transformation to have coordinates centered in the bounding box (and aligned with it)
         M = np.empty((4, 4))
-        #M[:3, :3] = R
-        M[:3, :3] = np.eye(3)
+        M[:3, :3] = R
         M[:3, 3] = centre
         M[3, :] = [0, 0, 0, 1]
 
-        self.M = np.linalg.inv(M)
-
-        if plot_3dbbox:
-            gt_p = np.loadtxt(f"data/onepose_datasets/val_data/0606-tiger-others/box3d_corners_GT.txt")
-            plot_3D_scene(
-                estQs=estQs,
-                gtQs=gt_p,
-                Ms_t=self.poses,
-                dataset="tiger",
-                save_output_images=False,
-                points=points,
-                GT_points=gt_p 
-            )
-            plt.show()
+        self.M = np.linalg.inv(M)            
 
 
     def save_3D_box(self, data_root):
@@ -90,7 +77,7 @@ class Detector3D:
 
     def save_poses(self, seq_dir, hololens):
         """Saves poses in the OnePose format (which is inverted respect to the Hololens format)"""
-        shift_pose_dir = f"{seq_dir}/poses_shifted/"
+        shift_pose_dir = f"{seq_dir}/poses/"
         if hololens:
             shift_pose_dir = f"{seq_dir}/poses/" # Overwrite poses
         os.makedirs(shift_pose_dir, exist_ok=True)
@@ -99,6 +86,19 @@ class Detector3D:
 
     def save_dimensions(self, data_root):
         np.savetxt(data_root + "/box3d_dimensions.txt", self.axes, delimiter=" ")
+
+    def plot_3D_bb(self, poses):
+        plot_3D_scene(
+            estQs=self.estQs,
+            gtQs=None,
+            Ms_t=poses,
+            dataset="tiger",
+            save_output_images=False,
+            points=self.points,
+            GT_points=None 
+        )
+        plt.show()
+
 
 
 def predict_3D_bboxes(
@@ -139,6 +139,15 @@ def predict_3D_bboxes(
     DetectorBox3D.shift_centres()
     DetectorBox3D.save_poses(seq_dir, hololens)
     DetectorBox3D.save_dimensions(data_root)
+    poses_t=None
+    for id, img_path in enumerate(tqdm(full_res_img_paths)):
+        poses = read_list_poses([poses_paths[id]], hololens=False)
+        if poses_t is None:
+            poses_t = poses
+        else:
+            poses_t = np.vstack((poses_t, poses))
+
+    DetectorBox3D.plot_3D_bb(poses_t)
 
 
 def sort_path_list(path_list):
@@ -166,7 +175,7 @@ def read_list_poses_orig(list):
     poses = []
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
-            poses.append(np.linalg.inv(np.loadtxt(f_input)))
+            poses.append(np.loadtxt(f_input))
     return poses
 
 

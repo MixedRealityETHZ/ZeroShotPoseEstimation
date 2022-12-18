@@ -180,10 +180,10 @@ def plot_camera(M, figure_axes):
     y = points[1, :].reshape(2, 5)
     z = points[2, :].reshape(2, 5)
 
-    # figure_axes.plot_wireframe(
-    #     x, y, z, rstride=1, cstride=1, color=[0, 0, 0], linewidth=0.5
-    # )
-    figure_axes.scatter(t[0], t[1], t[2])
+    figure_axes.plot_wireframe(
+        x, y, z, rstride=1, cstride=1, color=[0, 0, 0], linewidth=0.5
+    )
+    # figure_axes.scatter(t[0], t[1], t[2])
 
 
 def plot_3D_scene(

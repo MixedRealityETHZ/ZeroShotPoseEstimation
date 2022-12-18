@@ -4,6 +4,7 @@ import glob
 import hydra
 import torch
 import numpy as np
+import os
 
 import os.path as osp
 from loguru import logger
@@ -112,7 +113,7 @@ def sfm(cfg):
     """Reconstruct and postprocess sparse object point cloud, and store point cloud features"""
     data_dirs = cfg.dataset.data_dir
     down_ratio = cfg.sfm.down_ratio
-    crop_images = True if cfg.hololens else False
+    crop_images = False
     data_dirs = [data_dirs] if isinstance(data_dirs, str) else data_dirs
 
     for data_dir in data_dirs:
@@ -127,6 +128,9 @@ def sfm(cfg):
         full_res_img_paths += glob.glob(seq_dir + "/color_full/*.png", recursive=True)
         poses_paths += glob.glob(seq_dir + "/poses/*.txt", recursive=True)
         intrinsics_path = seq_dir + "/intrinsics.txt"
+
+        poses_paths.sort(key=lambda i: int(os.path.splitext(os.path.basename(i))[0]))
+        full_res_img_paths.sort(key=lambda i: int(os.path.splitext(os.path.basename(i))[0]))
 
         paths['final_intrin_file'] = intrinsics_path
         paths['reproj_box_dir'] = seq_dir + "/reproj_box/"
@@ -167,17 +171,18 @@ def sfm(cfg):
         if len(img_paths) == 0:
             logger.info(f"No png image in {root_dir}")
             continue
-
+        
+        img_paths.sort(key=lambda i: int(os.path.splitext(os.path.basename(i))[0]))
         # Choose less images from the list, to build the sfm model
         down_img_lists = []
         for img_file in img_paths:
             index = int(img_file.split("/")[-1].split(".")[0])
             if index % down_ratio == 0:
                 down_img_lists.append(img_file)
-
+        down_img_lists = sorted(down_img_lists, key=lambda i: int(os.path.splitext(os.path.basename(i))[0]))
         # Begin SfM and postprocess:
         sfm_core(cfg, down_img_lists, outputs_dir_root)
-        postprocess(cfg, down_img_lists, root_dir, outputs_dir_root, filter_with_3d_bbox=False)
+        postprocess(cfg, down_img_lists, root_dir, outputs_dir_root, filter_with_3d_bbox=True)
 
 
 def sfm_core(cfg, img_lists, outputs_dir_root):
