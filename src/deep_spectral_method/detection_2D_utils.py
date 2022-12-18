@@ -68,5 +68,9 @@ class UnsupBbox:
         )
         return self.bbox_orig_res
     
-    def save_2d_bbox(self, file_path):
-        np.savetxt(file_path, self.bbox_orig_res, delimiter=" ")
+    def save_2d_bbox(self, file_path, bbox_orig_res=None):
+        if bbox_orig_res is None:
+            np.savetxt(file_path, self.bbox_orig_res, delimiter=" ")
+        else:
+            np.savetxt(file_path, bbox_orig_res, delimiter=" ")
+

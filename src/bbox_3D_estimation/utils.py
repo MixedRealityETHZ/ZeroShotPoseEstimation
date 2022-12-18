@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 import itertools
 from tqdm import tqdm
 import cv2
+from scipy.spatial.transform import Rotation
 from src.deep_spectral_method.detection_2D_utils import UnsupBbox
 from src.utils import data_utils
 from src.bbox_3D_estimation.plotting import plot_3D_scene
@@ -51,13 +52,6 @@ class Detector3D:
         self.R = R
 
         if plot_3dbbox:
-            new_pose = self.poses.copy()
-            for i in range(self.poses.shape[0]):
-                if i%4==0 or i==0:
-                    curr_pose = new_pose[i:i+4,:]
-                    inv_pose = invert_pose(curr_pose)
-                    new_pose[i:i+4,:] = inv_pose
-
             plot_3D_scene(
                 estQs=estQs,
                 gtQs=None,
@@ -83,12 +77,10 @@ def predict_3D_bboxes_wrapper(
     intrinsics_path,
     poses_paths,
     data_root,
-    seq_dir,
     step=1,
     downscale_factor=0.3,
     device="cpu",
     root_2d_bbox=None,
-    hololens=False
 ):  
     full_res_img_paths = sort_path_list(full_res_img_paths)
     poses_paths = sort_path_list(poses_paths)
@@ -101,46 +93,57 @@ def predict_3D_bboxes_wrapper(
         if id % step == 0 or id == 0:
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            poses = read_list_poses([poses_paths[id]])
 
-            # if Hololens True then we invert the poses after reading them
-            original_pose = read_list_poses([poses_paths[id]])
-            if hololens:
-                right_h_pose = convert_left_to_right_hand_pose(original_pose)
-                poses = invert_pose(right_h_pose)
+            if not os.path.exists(root_2d_bbox):
+                os.makedirs(root_2d_bbox)
+
+            path_to_2dbbox=root_2d_bbox + f"{id}.txt"
+            if os.path.exists(path_to_2dbbox):
+                bbox_orig_res = np.loadtxt(path_to_2dbbox)
             else:
-                poses = original_pose
+                bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
 
-            bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
-            if root_2d_bbox is not None:
-                if not os.path.exists(root_2d_bbox):
-                    os.makedirs(root_2d_bbox)
-                BboxPredictor.save_2d_bbox(file_path = root_2d_bbox + f"{id}.txt")
-                DetectorBox3D.add_view(bbox_t=bbox_orig_res, pose_t=poses)
+            BboxPredictor.save_2d_bbox(file_path=path_to_2dbbox, bbox_orig_res=bbox_orig_res)
+            DetectorBox3D.add_view(bbox_t=bbox_orig_res, pose_t=poses)
 
     center, R = DetectorBox3D.detect_3D_box()
     DetectorBox3D.save_3D_box(data_root)
     DetectorBox3D.save_dimensions(data_root)
     return center, R
 
-def shift_poses(poses_list, M_inv):
+def shift_poses(poses_list, M):
+    # poses you get here are from CAMERA to WORLD
+    # M is from WORLD to OBJECT
     shifted_poses = []
     for pose in poses_list:
         #inverted = pose
-        inverted = np.linalg.inv(pose)
-        inverted = np.dot(M_inv, inverted)
-        original = np.linalg.inv(inverted)
-        shifted_poses.append(original)
+        #inverted = np.linalg.inv(pose)
+        # inverted = np.dot(M, inverted)
+        # original = np.linalg.inv(inverted)
+        new_pose = pose @ np.linalg.inv(M)
+        shifted_poses.append(new_pose)
     return shifted_poses
 
-def save_poses(seq_dir, shifted_poses, hololens):
+def save_poses(seq_dir, shifted_poses, folder_to_save="poses_inverted"):
     """Saves poses in the OnePose format (which is inverted respect to the Hololens format)"""
-    shift_pose_dir = f"{seq_dir}/poses_shifted/"
-    if hololens:
-        shift_pose_dir = f"{seq_dir}/poses/" # Overwrite original poses
-    
-    os.makedirs(shift_pose_dir, exist_ok=True)
-    for idx, pose in enumerate(shifted_poses):
-        np.savetxt(f"{shift_pose_dir}{idx}.txt", pose, delimiter=" ")
+    shift_pose_inv_dir = f"{seq_dir}/{folder_to_save}/"
+    shift_pose_dir = f"{seq_dir}/poses/"
+    poses_direc = [shift_pose_inv_dir, shift_pose_dir]
+
+    for pose_dir in poses_direc:
+        os.makedirs(pose_dir, exist_ok=True)
+        for idx, pose in enumerate(shifted_poses):
+            if pose.shape == (4,3):
+                pose_trasp = pose.T
+                pose_final = np.vstack((pose_trasp, np.array([0,0,0,1])))
+                assert pose_final.shape == (4,4)
+            else:
+                pose_final = pose
+            np.savetxt(f"{pose_dir}{idx}.txt", pose_final, delimiter=" ")
+        print(f"\n Saving poses in {pose_dir}")
+
+    return poses_direc
 
 
 def shift_poses_to_object_center(poses_paths, center, R, seq_dir, hololens):
@@ -149,11 +152,10 @@ def shift_poses_to_object_center(poses_paths, center, R, seq_dir, hololens):
     M[:3, :3] = R
     M[:3, 3] = center
     M[3, :] = [0, 0, 0, 1]
-    M_inv = np.linalg.inv(M)
     # read poses
     poses_list = read_poses_store_to_list(poses_paths)
-    shifted_poses = shift_poses(poses_list, M_inv)
-    save_poses(seq_dir, shifted_poses, hololens)
+    shifted_poses = shift_poses(poses_list, M)
+    save_poses(seq_dir, shifted_poses, folder_to_save="shifted_poses")
 
 
 def sort_path_list(path_list):
@@ -166,8 +168,8 @@ def read_list_poses(list):
     poses = []
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
-            transform = np.loadtxt(f_input)
-            pose = np.transpose(transform[:3, :])
+            pose_homo = np.loadtxt(f_input)
+            pose = np.transpose(pose_homo[:3, :])
             if idx == 0:
                 poses = pose
             else:
@@ -191,20 +193,30 @@ def convert_left_to_right_hand_pose(original_pose):
     # Extract rotation matrix and translation vector from left-handed pose T
     R = pose[:3, :3]
     t = pose[:3, 3]
-
+    
     # Negate first element of translation vector
-    t[0] = -t[0]
+    t[1] = -t[1]
+    new_rot = R
+    #rot = Rotation.from_matrix(R)
+    #quat = rot.as_quat()
+    #quat[0:3] = -quat[0:3]
+    #new_rot = Rotation.from_quat(quat).as_matrix()
 
-    # Negate first column of rotation matrix
-    R[:, 0] = -R[:, 0]
+    # R_transform = np.array([[-1, 0, 0],
+    #                 [0, -1, 0],
+    #                 [0, 0, 1]])
+
+    # rotate about z of 90 and about y of 90
+    R_transform = Rotation.from_euler('z', 90, degrees=True).as_matrix()
+
+    new_rot_from_trasf = R_transform @ new_rot @ np.linalg.inv(R_transform)
 
     # Construct right-handed pose T'
     T_prime = np.eye(4)
-    T_prime[:3, :3] = R
+    T_prime[:3, :3] = new_rot_from_trasf
     T_prime[:3, 3] = t
 
     return T_prime.T[:,:3]
-
 
 
 def read_poses_store_to_list(paths):

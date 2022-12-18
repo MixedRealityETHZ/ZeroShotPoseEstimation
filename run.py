@@ -4,6 +4,7 @@ import glob
 import hydra
 import torch
 import numpy as np
+from tqdm import tqdm
 
 import os.path as osp
 from loguru import logger
@@ -13,6 +14,7 @@ from omegaconf import DictConfig
 from src.bbox_3D_estimation.utils import predict_3D_bboxes_wrapper, shift_poses_to_object_center
 from src.utils.parse_scanned_data import parse_images
 from src.utils import data_utils
+from src.bbox_3D_estimation.utils import sort_path_list, read_list_poses, invert_pose, save_poses
 
 
 def merge_(
@@ -113,6 +115,7 @@ def sfm(cfg):
     data_dirs = cfg.dataset.data_dir
     down_ratio = cfg.sfm.down_ratio
     crop_images = True if cfg.hololens else False
+    step = 1
     data_dirs = [data_dirs] if isinstance(data_dirs, str) else data_dirs
 
     for data_dir in data_dirs:
@@ -133,24 +136,35 @@ def sfm(cfg):
         paths['crop_img_root'] = seq_dir + "/color/"
         paths['intrin_dir'] = seq_dir + "/intrin/"
         paths['img_list'] = full_res_img_paths
-        paths['M_dir'] = seq_dir + "/modified_poses/"
-
+        #paths['M_dir'] = None
 
         obj_name = root_dir.split("/")[-1]
         outputs_dir_root = cfg.dataset.outputs_dir.format(obj_name)
 
+        poses_paths = sort_path_list(poses_paths)
+        all_poses_ = []
+        for id, curr_pose_path in enumerate(tqdm(poses_paths)):
+            # POTENTIAL BUG IN USING THIS STEP, NOT ALL IMAGES POSES ARE UPDATED
+            if id % step == 0 or id == 0:
+                # if Hololens True then we invert the poses after reading them
+                original_pose = read_list_poses([curr_pose_path])
+                if cfg.hololens:
+                    #right_h_pose = convert_left_to_right_hand_pose(original_pose)
+                    pose = invert_pose(original_pose)
+                    all_poses_.append(pose)
+
+        poses_path_used = save_poses(seq_dir=seq_dir, shifted_poses=all_poses_, folder_to_save="inverted_poses")
+
         # Begin predict 3d bboxes
         if not os.path.exists(root_dir + "/box3d_corners.txt") or cfg.redo_3d_bbox:
             center_3d_box, R_3d_box = predict_3D_bboxes_wrapper(
-                intrinsics_path=intrinsics_path,
+                device="cuda" if torch.cuda.is_available() else "cpu",
                 full_res_img_paths=full_res_img_paths,
+                root_2d_bbox=paths['reproj_box_dir'],
+                intrinsics_path=intrinsics_path,
                 poses_paths=poses_paths,
                 data_root=root_dir,
-                seq_dir=seq_dir,
-                device="cuda" if torch.cuda.is_available() else "cpu",
-                step=1,
-                hololens=cfg.hololens,
-                root_2d_bbox=paths['reproj_box_dir'],
+                step=step,
             )
 
             # Shift poses
@@ -183,6 +197,8 @@ def sfm(cfg):
             index = int(img_file.split("/")[-1].split(".")[0])
             if index % down_ratio == 0:
                 down_img_lists.append(img_file)
+        
+        down_img_lists = sort_path_list(down_img_lists)
 
         # Begin SfM and postprocess:
         sfm_core(cfg, down_img_lists, outputs_dir_root)
