@@ -109,9 +109,12 @@ def deserialize_image_msg(msg: PosedImageStamped):
     image = np.array(msg.data).reshape(msg.height, msg.width, msg.step)
     if str(msg.encoding).upper() == "RGBA":
         image = image[..., :3]
-    elif str(msg.encoding).upper() == "BGRA" or str(msg.encoding).upper() == "BGRA32":
+    elif str(msg.encoding).upper() == "BGRA":
         image = image[..., :3]
         msg.encoding = "BGR"
+    elif str(msg.encoding).upper() == "BGRA32":
+        image = image[..., :3]
+        image = np.flipud(image)
     if str(msg.encoding).upper() == "BGR":
         image = image[..., ::-1]
     
