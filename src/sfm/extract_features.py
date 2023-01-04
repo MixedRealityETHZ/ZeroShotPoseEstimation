@@ -38,7 +38,7 @@ def spp(img_lists, feature_out, cfg):
     load_network(model, cfg.network.detection_model_path, force=True)
 
     dataset = NormalizedDataset(img_lists, conf["preprocessing"])
-    loader = DataLoader(dataset, num_workers=1)
+    loader = DataLoader(dataset, num_workers=0)
 
     feature_file = h5py.File(feature_out, "w")
     logging.info(f"Exporting features to {feature_out}")

@@ -58,29 +58,15 @@ class Detector3D:
         self.points = points
         self.centre = centre
         self.R = R
+        self.estQs = estQs
 
         # Transformation to have coordinates centered in the bounding box (and aligned with it)
         M = np.empty((4, 4))
         M[:3, :3] = R
         M[:3, 3] = centre
         M[3, :] = [0, 0, 0, 1]
-        # print(M)
 
         self.M = np.linalg.inv(M)
-
-
-        # gt_p = np.loadtxt(f"data/onepose_datasets/val_data/0606-tiger-others/box3d_corners_GT.txt")
-
-        # plot_3D_scene(
-        # estQs=estQs,
-        # gtQs=gt_p,
-        # Ms_t=self.poses,
-        # dataset="tiger",
-        # save_output_images=False,
-        # points=points,
-        # GT_points=gt_p 
-        # )
-        # plt.show()
 
 
     def save_3D_box(self, data_root):
@@ -105,6 +91,18 @@ class Detector3D:
     def save_dimensions(self, data_root):
         np.savetxt(data_root + "/box3d_dimensions.txt", self.axes, delimiter=" ")
 
+    def plot_3D_bb(self, poses):
+        plot_3D_scene(
+            estQs=self.estQs,
+            gtQs=None,
+            Ms_t=poses,
+            dataset="tiger",
+            save_output_images=False,
+            points=self.points,
+            GT_points=None 
+        )
+        plt.show()
+
 
 def predict_3D_bboxes(
     full_res_img_paths,
@@ -113,7 +111,7 @@ def predict_3D_bboxes(
     data_root,
     seq_dir,
     step=1,
-    downscale_factor=0.3,
+    downscale_factor=0.6,
     compute_on_GPU="cpu",
     hololens=False
 ):  
@@ -124,14 +122,48 @@ def predict_3D_bboxes(
     DetectorBox3D = Detector3D(_K)
     BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, device=compute_on_GPU)
 
+
     for id, img_path in enumerate(tqdm(full_res_img_paths)):
         if id % step == 0 or id == 0:
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             poses = read_list_poses([poses_paths[id]], hololens=hololens)
             poses_orig = read_list_poses_orig([poses_paths[id]])
-            
             bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
+
+        
+            
+            ##--------Plotting the RGB image---------
+            image_2 = image.copy()
+            limits = bbox_orig_res[0]
+            start_point = (int(limits[0]), int(limits[1]))
+            end_point = (int(limits[2]), int(limits[3]))
+
+            # Blue color in BGR
+            color = (255, 0, 0)            
+            # Line thickness of 2 px
+            thickness = 2
+            
+            # Draw a rectangle with blue line borders of thickness of 2 px
+            image_2 = cv2.rectangle(image_2, start_point, end_point, color, thickness)
+
+            if len(bbox_orig_res[1]):
+                limits_2 = bbox_orig_res[1]
+                start_point_2 = (int(limits_2[0]), int(limits_2[1]))
+                end_point_2 = (int(limits_2[2]), int(limits_2[3]))
+                # Blue color in BGR
+                color_2 = (0, 255, 0)
+                # Draw a rectangle with blue line borders of thickness of 2 px
+                image_2 = cv2.rectangle(image_2, start_point_2, end_point_2, color_2, thickness)
+            
+            cv2.imshow("Image", image_2)
+            
+            cv2.imwrite('/Users/diego/Desktop/Escritorio_MacBook_Pro_de_Diego/ETH/Third_Semester/Mixed_Reality/Real_2/ZeroShotPoseEstimation/data/onepose_datasets/val_data/0620-dinosaurcup-bottle/dinosaurcup-1/detection_2/'+str(id)+ '.jpg', image_2)
+            #cv2.waitKey(1)
+            
+            #1 is for the bbox without a filter, 0 is with filter
+            bbox_orig_res = bbox_orig_res[1]
+
             DetectorBox3D.add_view(bbox_orig_res, poses, poses_orig)
 
     DetectorBox3D.detect_3D_box()
@@ -140,6 +172,16 @@ def predict_3D_bboxes(
     DetectorBox3D.save_poses(seq_dir)
     DetectorBox3D.save_dimensions(data_root)
 
+    poses_t=None
+    for id, img_path in enumerate(tqdm(full_res_img_paths)):
+        poses = read_list_poses([poses_paths[id]], hololens=False)
+        if poses_t is None:
+            poses_t = poses
+        else:
+            poses_t = np.vstack((poses_t, poses))
+
+    DetectorBox3D.plot_3D_bb(poses_t)
+    print("-------Predict 3D bboxes finished-------")
 
 def sort_path_list(path_list):
     files = {int(Path(file).stem): file for file in path_list}
@@ -476,6 +518,7 @@ def estimate_one_ellipsoid(Ps_t, Cs):
         except:
             i += 1
             print(i)
+
 
     _, _, V = np.linalg.svd(M)
     w = V[-1, :]  # V is transposed respect to Matlab, so we take the last row.
