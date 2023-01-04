@@ -121,11 +121,12 @@ def sfm(cfg):
         for sub_dir in sub_dirs:
             seq_dir = osp.join(root_dir, sub_dir)
             img_paths += glob.glob(str(Path(seq_dir)) + "/color/*.png", recursive=True)
-            full_res_img_paths += glob.glob(str(Path(seq_dir)) + "/color_full/*.png", recursive=True)
+            full_res_img_paths += glob.glob(str(Path(seq_dir)) + "/color_full/*.jpg", recursive=True)
             poses_paths += glob.glob(str(Path(seq_dir)) + "/poses/*.txt", recursive=True)
             intrinsics_path = str(Path(seq_dir)) + "/intrinsics.txt"
-            poses_paths += glob.glob(str(Path(seq_dir)) + "/poses/*.txt", recursive=True)
-            intrinsics_path = str(Path(seq_dir)) + "/intrinsics.txt"
+            
+            #poses_paths += glob.glob(str(Path(seq_dir)) + "/poses/*.txt", recursive=True)
+            #intrinsics_path = str(Path(seq_dir)) + "/intrinsics.txt"
 
         # Choose less images from the list to build the sfm model
 
@@ -149,14 +150,17 @@ def sfm(cfg):
             poses_paths=poses_paths,
             data_root=root_dir,
             seq_dir = seq_dir,
-            compute_on_GPU="cuda",
+            compute_on_GPU="cpu",
             step=1,
             hololens=cfg.hololens
         )
 
         # Begin SfM and postprocess:
+        print("Begin of SFM")
         sfm_core(cfg, down_img_lists, outputs_dir_root)
+        print("SfM")
         postprocess(cfg, down_img_lists, root_dir, outputs_dir_root)
+        print("Post-process done")
 
 
 def sfm_core(cfg, img_lists, outputs_dir_root):
@@ -179,6 +183,7 @@ def sfm_core(cfg, img_lists, outputs_dir_root):
     matches_out = osp.join(outputs_dir, f"matches-{cfg.network.matching}.h5")
     empty_dir = osp.join(outputs_dir, "sfm_empty")
     deep_sfm_dir = osp.join(outputs_dir, "sfm_ws")
+
 
     if cfg.redo:
         os.system(f"rm -rf {outputs_dir}")

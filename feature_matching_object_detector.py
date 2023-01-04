@@ -149,9 +149,6 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
 
     # Begin Object detection:
     for id, data in enumerate(tqdm(loader)):
-    #for data in (tqdm(loader)):
-
-    #for id, data in enumerate((loader)):
 
         img_path = data["path"][0]
         inp = data["image"].to(device)

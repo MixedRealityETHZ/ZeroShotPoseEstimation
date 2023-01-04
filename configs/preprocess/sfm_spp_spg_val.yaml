@@ -6,15 +6,14 @@ redo: True
 hololens: True
 
 # scan_data_dir: ${work_dir}/data/onepose_datasets/val_data
-scan_data_dir: ${work_dir}/data/costum_datasets/test
-
+scan_data_dir: ${work_dir}/data/onepose_datasets/val_data
 dataset:
     max_num_kp3d: 2500
     max_num_kp2d: 1000
 
     data_dir:
         # - ${scan_data_dir}/0606-tiger-others tiger-2
-        - ${scan_data_dir}/demo_capture demo-1
+        - ${scan_data_dir}/0620-dinosaurcup-bottle dinosaurcup-1
 
     outputs_dir: ${work_dir}/data/sfm_model/{}
 

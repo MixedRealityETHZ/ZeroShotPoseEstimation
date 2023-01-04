@@ -17,10 +17,79 @@ from tqdm import tqdm
 from scipy.sparse.linalg import eigsh
 
 from . import extract_utils as utils
-
+import lmfit
 # import extract_utils as utils
 
+def gaussian_fitting(
+    feature_dict: dict,
+    eigs_dict: dict,
+    fitting_model:dict,
+):
+    flag = False
+    data_dict = feature_dict
+    data_dict.update(eigs_dict)
+    # Sizes
+    B, C, H, W, P, H_patch, W_patch, H_pad, W_pad = utils.get_image_sizes(data_dict)
 
+    Xin, Yin = np.mgrid[0:H_patch, 0:W_patch]
+
+    # Eigenvector
+    eigenvector = data_dict["eigenvectors"][
+        1
+    ].numpy().copy()
+
+    params = fitting_model.guess(eigenvector, Xin.flatten(), Yin.flatten())
+    params['sigmax'].set(min = 0, max = W_patch/2)
+    params['sigmay'].set(min = 0, max = H_patch/2)
+
+    #This happens when the eigenvector is flipped
+    if (np.max(eigenvector) < 0.01):
+        #Get the lower 10%
+        ei = np.sort(eigenvector)[int(0.10 * W_patch * H_patch)]
+        eigenvector[eigenvector > ei] = 0.
+
+        eigs = eigenvector.copy().reshape(H_patch, W_patch)
+        graph_2 = (np.array(eigs) / np.min((eigs)))
+        
+        mult_x = graph_2 * Xin
+        mult_y = graph_2 * Yin
+
+        xsum = np.mean(mult_x[eigs != 0.])
+        ysum = np.mean(mult_y[eigs != 0.])
+
+        params['centerx'].set(value = xsum, min = 0, max = W_patch)
+        params['centery'].set(value = ysum, min = 0, max = H_patch)
+         
+        params['amplitude'].set(np.min(eigenvector))
+        flag = True
+    
+    result = fitting_model.fit(eigenvector.flatten(), x=Xin.flatten(), y=Yin.flatten(), params=params, weights=1/np.sqrt(eigenvector+1))
+    fit = fitting_model.func(Xin, Yin, **result.best_values)
+
+    #Flip the fitted curve
+    if flag:
+        fit *= -1
+
+    fit += -np.min(fit)
+    fit /= np.max(fit)
+
+    '''
+    fit_2 = fit.copy()
+    eigs = eigenvector.reshape(H_patch, W_patch)
+    plt.imshow(eigs)
+    plt.show()
+
+    cv2.namedWindow("Fitting",cv2.WINDOW_NORMAL)
+    cv2.imshow("Fitting", fit_2)
+    cv2.resizeWindow("Fitting", 600,600)
+    cv2.waitKey(1)
+    '''
+
+    #Segmentation mask
+    segmap = (fit > 0.3)
+
+    return segmap
+    
 def extract_features(
     model: dict,
     patch_size: int,
