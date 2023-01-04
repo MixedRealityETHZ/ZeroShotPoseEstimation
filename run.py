@@ -236,7 +236,7 @@ def sfm_core(cfg, img_lists, outputs_dir_root):
         )
 
 
-def postprocess(cfg, img_lists, root_dir, outputs_dir_root, filter_with_3d_bbox=True):
+def postprocess(cfg, img_lists, root_dir, outputs_dir_root, filter_with_3d_bbox=False):
     """Filter points and average feature"""
     from src.sfm.postprocess import filter_points, feature_process, filter_tkl
 

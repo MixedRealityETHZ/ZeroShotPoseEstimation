@@ -3,18 +3,18 @@ import glob
 import numpy as np
 from src.bbox_3D_estimation.utils import read_list_poses_orig
 import re
-from scipy.spatial.transform import Rotation as Rotmat
+from scipy.spatial.transform import Rotation as R
 
 
 
-# r = R.from_quat([0, 0, np.sin(np.pi/4), np.cos(np.pi/4)])
-# print(r.as_matrix())
+r = R.from_quat([0.3535534, 0.3535534, 0.1464466, 0.8535534])
+print(r.as_matrix())
 
 regex = re.compile('[^0-9]')
 
-DIR = "data/costum_datasets/test/demo_bottle_sfm/bottle-1/"
+DIR = "data/costum_datasets/test/demo_bottle/bottle-1/"
 
-poses = sorted(glob.glob(f"{DIR}backup-poses/poses/*.txt"))
+poses = sorted(glob.glob(f"{DIR}backup/poses/*.txt"))
 names = []
 for pose in poses:
     name = regex.sub("", pose)[1:]
@@ -22,17 +22,18 @@ for pose in poses:
 poses = read_list_poses_orig(poses)
 
 M = np.empty((4, 4))
-M[:3, :3] = np.array([[  1.0000000, 0.0000000,  0.0000000],
-                      [  0.0000000, 1.0000000,  0.0000000],
-                      [  0.0000000, 0.0000000, 1.0000000 ]])
-M[:3, 3] =  np.array([+0, 0, 0])
+# M[:3, :3] = np.array([[  1.0000000, 0.0000000,  0.0000000],
+#                       [  0.0000000, 1.0000000,  0.0000000],
+#                       [  0.0000000, 0.0000000, 1.0000000 ]])
+M[:3, :3] = r.as_matrix()
+M[:3, 3] =  np.array([1, 1, 0])
 M[3, :] = [0, 0, 0, 1]
 
 
 def ruf_to_flu(pose):
-    rotquat_ruf = Rotmat.from_matrix(pose[:3,:3]).as_quat()
+    rotquat_ruf = R.from_matrix(pose[:3,:3]).as_quat()
     rotquat_flu = np.array([-rotquat_ruf[2], rotquat_ruf[0], -rotquat_ruf[1], rotquat_ruf[3]])
-    rotmat_flu = Rotmat.from_quat(rotquat_flu).as_matrix()
+    rotmat_flu = R.from_quat(rotquat_flu).as_matrix()
 
     transl_ruf = pose[:3, 3]
     transl_flu = np.array([transl_ruf[2], -transl_ruf[0], transl_ruf[1]])
@@ -46,8 +47,9 @@ def ruf_to_flu(pose):
 shifted_poses = []
 for pose in poses:
 
-    # pose = np.dot(M, pose)
+    
     # pose = np.linalg.inv(pose)
+    # pose = np.dot(M, pose)
 
     # Extract rotation matrix and translation vector from left-handed pose T
     # R = pose[:3, :3]
@@ -70,7 +72,7 @@ for pose in poses:
     
     # inverted = T_prime #np.dot(T_prime, pose)
     # T_prime = pose
-    pose = ruf_to_flu(pose)
+    # pose = ruf_to_flu(pose)
 
     original = np.linalg.inv(pose)
 

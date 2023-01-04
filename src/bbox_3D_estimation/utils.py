@@ -48,6 +48,12 @@ class Detector3D:
         # Coordinates of the points mins and maxs
         points = np.array(list(itertools.product(*zip(mins, maxs))))
 
+        # # Points in the camera frame
+        # points = np.dot(points, R.T)
+
+        # # Shift correctly the parralelepiped
+        # points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
+
         self.axes = axes
         self.points = points
         self.centre = centre
@@ -56,11 +62,11 @@ class Detector3D:
 
         # Transformation to have coordinates centered in the bounding box (and aligned with it)
         M = np.empty((4, 4))
-        M[:3, :3] = R
-        M[:3, 3] = centre
+        M[:3, :3] = R # np.eye(3) # R
+        M[:3, 3] = centre # [0, 0, 0] # centre
         M[3, :] = [0, 0, 0, 1]
 
-        self.M = np.linalg.inv(M)            
+        self.M = np.linalg.inv(M)
 
 
     def save_3D_box(self, data_root):

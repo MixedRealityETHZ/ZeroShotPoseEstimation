@@ -152,7 +152,7 @@ def plot_camera(M, figure_axes):
     The base of the pyramid points in the positive Z axis direction.
     """
     # Compute the points for the camera at the origin, aligned with the axes.
-    base_width = 0.20  # Width (and height) of the pyramid base in meters
+    base_width = 0.05  # Width (and height) of the pyramid base in meters
     x = np.array([0, 0, 0, 0, 0, 1, 1, -1, -1, 1]) * base_width / 2
     y = np.array([0, 0, 0, 0, 0, 1, -1, -1, 1, 1]) * base_width / 2
     z = np.array([0, 0, 0, 0, 0, 2, 2, 2, 2, 2]) * base_width / 2
@@ -184,6 +184,7 @@ def plot_camera(M, figure_axes):
         x, y, z, rstride=1, cstride=1, color=[0, 0, 0], linewidth=0.5
     )
     # figure_axes.scatter(t[0], t[1], t[2])
+    figure_axes.scatter(0, 0, 0)
 
 
 def plot_3D_scene(
