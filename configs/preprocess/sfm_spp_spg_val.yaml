@@ -13,8 +13,8 @@ dataset:
     max_num_kp2d: 1000
 
     data_dir:
-        # - ${scan_data_dir}/0606-tiger-others tiger-2
-        - ${scan_data_dir}/0620-dinosaurcup-bottle dinosaurcup-1
+        - ${scan_data_dir}/0606-tiger-others tiger-1
+        # - ${scan_data_dir}/0620-dinosaurcup-bottle dinosaurcup-1
         # - ${scan_data_dir}/demo_bottle_sfm bottle-1
         # - ${scan_data_dir}/demo_capture demo-1 
 
