@@ -32,6 +32,6 @@ if __name__ == "__main__":
         BboxPredictor=BboxPredictor,
         full_res_img_paths=img_lists,
         poses_paths=poses_list,
-        intrisics_path=K,
+        intrinsics_path=K,
         data_root=data_root,
     )

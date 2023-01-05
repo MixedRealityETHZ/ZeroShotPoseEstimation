@@ -18,14 +18,16 @@ sfm_model_dir: ${data_dir}/sfm_model
 
 input:
     data_dirs:
-        - ${scan_data_dir}/0606-tiger-others tiger-2
-        - ${scan_data_dir}/0613-adidasshoeright-others adidasshoeright-2
-        - ${scan_data_dir}/0601-loquat-box loquat-2
-        - ${scan_data_dir}/0602-aficion-box aficion-2
+        - ${scan_data_dir}/0620-dinosaurcup-bottle dinosaurcup-1
+        # - ${scan_data_dir}/0606-tiger-others tiger-2
+        # - ${scan_data_dir}/0613-adidasshoeright-others adidasshoeright-2
+        # - ${scan_data_dir}/0601-loquat-box loquat-2
+        # - ${scan_data_dir}/0602-aficion-box aficion-2
         
  
     sfm_model_dirs:
-        - ${sfm_model_dir}/0606-tiger-others
-        - ${sfm_model_dir}/0613-adidasshoeright-others
-        - ${sfm_model_dir}/0601-loquat-box
-        - ${sfm_model_dir}/0602-aficion-box
+        - ${scan_data_dir}/0620-dinosaurcup-bottle
+        # - ${sfm_model_dir}/0606-tiger-others
+        # - ${sfm_model_dir}/0613-adidasshoeright-others
+        # - ${sfm_model_dir}/0601-loquat-box
+        # - ${sfm_model_dir}/0602-aficion-box
