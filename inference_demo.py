@@ -163,9 +163,7 @@ def inference_core(
     seq_dir,
     sfm_model_dir,
     object_det_type="detection",
-    verbose=False,
 ):
-
     BboxPredictor = UnsupBbox(downscale_factor=0.3, device=get_device(no_mps=True))
 
     # Load models and prepare data:
@@ -231,8 +229,7 @@ def inference_core(
             inp = data["image"].to(device)
             # Detect object:
             # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
-            start = time.time()
-            if object_det_type == "features" or id == 0:
+            if object_det_type == "features" :
                 bbox2d, inp_crop, K_crop = local_feature_obj_detector.detect(
                     inp,
                     img_path,
@@ -257,11 +254,6 @@ def inference_core(
                 previous_frame_pose, inliers = pred_poses[id - 1]
                 _, inp_crop, K_crop, = local_feature_obj_detector.previous_pose_detect(
                     img_path, K, previous_frame_pose, box3d
-                )
-
-            if verbose:
-                logger.info(
-                    f"feature matching runtime: {(time.time() - start)%60} seconds"
                 )
 
             # Detect query image(cropped) keypoints and extract descriptors:

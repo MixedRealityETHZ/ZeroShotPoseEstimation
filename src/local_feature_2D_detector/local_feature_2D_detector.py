@@ -57,18 +57,19 @@ class LocalFeatureObjectDetector:
         # Prepare reference input to matcher:
         db_dict = {}  # id: image
         for idx in range(1, len(images), sample_gap):
-            db_img_path = images[idx].name
+            if idx in images.keys():
+                db_img_path = images[idx].name
 
-            db_img = pack_extract_data(db_img_path)
+                db_img = pack_extract_data(db_img_path)
 
-            # Detect DB image keypoints:
-            db_inp = db_img[None].to(self.device)
-            db_detection = self.extractor(db_inp)
-            db_detection = {
-                k: v[0].detach().cpu().numpy() for k, v in db_detection.items()
-            }
-            db_detection["size"] = np.array(db_img.shape[-2:])
-            db_dict[idx] = db_detection
+                # Detect DB image keypoints:
+                db_inp = db_img[None].to(self.device)
+                db_detection = self.extractor(db_inp)
+                db_detection = {
+                    k: v[0].detach().cpu().numpy() for k, v in db_detection.items()
+                }
+                db_detection["size"] = np.array(db_img.shape[-2:])
+                db_dict[idx] = db_detection
 
         return db_dict
 

@@ -114,7 +114,7 @@ def sfm(cfg):
     """Reconstruct and postprocess sparse object point cloud, and store point cloud features"""
     data_dirs = cfg.dataset.data_dir
     down_ratio = cfg.sfm.down_ratio
-    crop_images = True if cfg.hololens else False
+    crop_images = True #crop_images = True if cfg.hololens else False
     step = 1
     data_dirs = [data_dirs] if isinstance(data_dirs, str) else data_dirs
 
@@ -142,18 +142,19 @@ def sfm(cfg):
         outputs_dir_root = cfg.dataset.outputs_dir.format(obj_name)
 
         poses_paths = sort_path_list(poses_paths)
-        all_poses_ = []
-        for id, curr_pose_path in enumerate(tqdm(poses_paths)):
-            # POTENTIAL BUG IN USING THIS STEP, NOT ALL IMAGES POSES ARE UPDATED
-            if id % step == 0 or id == 0:
-                # if Hololens True then we invert the poses after reading them
-                original_pose = read_list_poses([curr_pose_path])
-                if cfg.hololens:
-                    #right_h_pose = convert_left_to_right_hand_pose(original_pose)
-                    pose = invert_pose(original_pose)
-                    all_poses_.append(pose)
+        if cfg.hololens:
+            all_poses_ = []
+            for id, curr_pose_path in enumerate(tqdm(poses_paths)):
+                # POTENTIAL BUG IN USING THIS STEP, NOT ALL IMAGES POSES ARE UPDATED
+                if id % step == 0 or id == 0:
+                    # if Hololens True then we invert the poses after reading them
+                    original_pose = read_list_poses([curr_pose_path])
+                    if cfg.hololens:
+                        #right_h_pose = convert_left_to_right_hand_pose(original_pose)
+                        pose = invert_pose(original_pose)
+                        all_poses_.append(pose)
 
-        poses_path_used = save_poses(seq_dir=seq_dir, shifted_poses=all_poses_, folder_to_save="inverted_poses")
+            poses_path_used = save_poses(seq_dir=seq_dir, shifted_poses=all_poses_, folder_to_save="inverted_poses")
 
         # Begin predict 3d bboxes
         if not os.path.exists(root_dir + "/box3d_corners.txt") or cfg.redo_3d_bbox:
@@ -202,7 +203,7 @@ def sfm(cfg):
 
         # Begin SfM and postprocess:
         sfm_core(cfg, down_img_lists, outputs_dir_root)
-        postprocess(cfg, down_img_lists, root_dir, outputs_dir_root, filter_with_3d_bbox=False)
+        postprocess(cfg, down_img_lists, root_dir, outputs_dir_root, filter_with_3d_bbox=True)
 
 
 def sfm_core(cfg, img_lists, outputs_dir_root):
