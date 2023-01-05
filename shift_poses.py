@@ -7,17 +7,17 @@ from scipy.spatial.transform import Rotation as R
 
 
 
-r = R.from_quat([0.3535534, 0.3535534, 0.1464466, 0.8535534])
-print(r.as_matrix())
+r = R.from_quat([ 0, -0.4871745, 0, -0.8733046 ])
+# print(r.as_matrix())
 
 regex = re.compile('[^0-9]')
 
-DIR = "data/costum_datasets/test/demo_bottle/bottle-1/"
+DIR = "data/onepose_datasets/val_data/0620-dinosaurcup-bottle/dinosaurcup-1/"
 
 poses = sorted(glob.glob(f"{DIR}backup/poses/*.txt"))
 names = []
 for pose in poses:
-    name = regex.sub("", pose)[1:]
+    name = regex.sub("", pose)[5:]
     names.append(name)
 poses = read_list_poses_orig(poses)
 
@@ -25,8 +25,8 @@ M = np.empty((4, 4))
 # M[:3, :3] = np.array([[  1.0000000, 0.0000000,  0.0000000],
 #                       [  0.0000000, 1.0000000,  0.0000000],
 #                       [  0.0000000, 0.0000000, 1.0000000 ]])
-M[:3, :3] = r.as_matrix()
-M[:3, 3] =  np.array([1, 1, 0])
+M[:3, :3] = np.eye(3) # r.as_matrix()
+M[:3, 3] =  np.array([0, 0, 0])
 M[3, :] = [0, 0, 0, 1]
 
 
@@ -48,7 +48,7 @@ shifted_poses = []
 for pose in poses:
 
     
-    # pose = np.linalg.inv(pose)
+    pose = np.linalg.inv(pose)
     # pose = np.dot(M, pose)
 
     # Extract rotation matrix and translation vector from left-handed pose T

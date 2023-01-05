@@ -48,14 +48,15 @@ class Detector3D:
         # Coordinates of the points mins and maxs
         points = np.array(list(itertools.product(*zip(mins, maxs))))
 
-        # # Points in the camera frame
-        # points = np.dot(points, R.T)
+        # Points in the camera frame
+        orig_points = np.dot(points, R.T)
 
-        # # Shift correctly the parralelepiped
-        # points[:, 0:3] = np.add(centre[None, :], points[:, :3],)
+        # Shift correctly the parralelepiped
+        orig_points[:, 0:3] = np.add(centre[None, :], orig_points[:, :3],)
 
         self.axes = axes
         self.points = points
+        self.orig_points = orig_points
         self.centre = centre
         self.R = R
         self.estQs = estQs
@@ -101,10 +102,37 @@ class Detector3D:
             dataset="tiger",
             save_output_images=False,
             points=self.points,
+            orig_points=self.orig_points,
             GT_points=GT_points 
         )
         plt.show()
 
+    def iou(self, coords2):
+
+        # Predicted parallelepiped
+        coords1 = self.points
+
+        # Find the min and max x, y, and z coordinates for each parallelepiped
+        min_coords1 = np.min(coords1, axis=0)
+        max_coords1 = np.max(coords1, axis=0)
+        min_coords2 = np.min(coords2, axis=0)
+        max_coords2 = np.max(coords2, axis=0)
+
+        # Find the intersection of the two parallelepipeds
+        intersection_min = np.max([min_coords1, min_coords2], axis=0)
+        intersection_max = np.min([max_coords1, max_coords2], axis=0)
+        
+        # Find the volume of the intersection
+        intersection_volume = np.prod(intersection_max - intersection_min)
+
+        # Find the volume of each parallelepiped
+        volume1 = np.prod(max_coords1 - min_coords1)
+        volume2 = np.prod(max_coords2 - min_coords2)
+
+        # Calculate the intersection over union (IoU)
+        iou = intersection_volume / (volume1 + volume2 - intersection_volume)
+
+        return iou
 
 
 def predict_3D_bboxes(
@@ -155,6 +183,9 @@ def predict_3D_bboxes(
     
     GT_points = np.loadtxt(data_root + "/box3d_corners_GT.txt")
 
+    iou = DetectorBox3D.iou(GT_points)
+    print("IoU is: ", iou)
+    print("Predicted transformation is: \n", np.linalg.inv(DetectorBox3D.M))
     DetectorBox3D.plot_3D_bb(poses_t, GT_points=GT_points)
 
 

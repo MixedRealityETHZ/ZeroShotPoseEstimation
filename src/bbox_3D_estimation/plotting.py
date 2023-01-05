@@ -184,11 +184,11 @@ def plot_camera(M, figure_axes):
         x, y, z, rstride=1, cstride=1, color=[0, 0, 0], linewidth=0.5
     )
     # figure_axes.scatter(t[0], t[1], t[2])
-    figure_axes.scatter(0, 0, 0)
+    # figure_axes.scatter(0, 0, 0)
 
 
 def plot_3D_scene(
-    estQs, gtQs, Ms_t, dataset, save_output_images, points, GT_points, visibility=None
+    estQs, gtQs, Ms_t, dataset, save_output_images, points, orig_points, GT_points, visibility=None
 ):
     """Plot"""
     fig = plt.figure(figsize=(8, 8))  # Open a new figure.
@@ -260,6 +260,26 @@ def plot_3D_scene(
         )
 
         figure_axes.scatter(GT_points[:, 0], GT_points[:, 1], GT_points[:, 2])
+    
+    Z = orig_points
+    # list of sides' polygons of figure
+    verts = [
+        [Z[0], Z[1], Z[3], Z[2]],
+        [Z[4], Z[5], Z[7], Z[6]],
+        [Z[2], Z[3], Z[7], Z[6]],
+        [Z[0], Z[1], Z[5], Z[4]],
+        [Z[0], Z[2], Z[6], Z[4]],
+        [Z[1], Z[3], Z[7], Z[5]],
+    ]
+
+    # plot sides
+    figure_axes.add_collection3d(
+        Poly3DCollection(
+            verts, facecolors="blue", linewidths=1, edgecolors="r", alpha=0.25
+        )
+    )
+
+    figure_axes.scatter(orig_points[:, 0], orig_points[:, 1], orig_points[:, 2])
 
     fig.show()
 
