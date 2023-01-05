@@ -93,7 +93,7 @@ class Detector3D:
     def save_dimensions(self, data_root):
         np.savetxt(data_root + "/box3d_dimensions.txt", self.axes, delimiter=" ")
 
-    def plot_3D_bb(self, poses):
+    def plot_3D_bb(self, poses, GT_points=None):
         plot_3D_scene(
             estQs=self.estQs,
             gtQs=None,
@@ -101,7 +101,7 @@ class Detector3D:
             dataset="tiger",
             save_output_images=False,
             points=self.points,
-            GT_points=None 
+            GT_points=GT_points 
         )
         plt.show()
 
@@ -152,8 +152,10 @@ def predict_3D_bboxes(
             poses_t = poses
         else:
             poses_t = np.vstack((poses_t, poses))
+    
+    GT_points = np.loadtxt(data_root + "/box3d_corners_GT.txt")
 
-    DetectorBox3D.plot_3D_bb(poses_t)
+    DetectorBox3D.plot_3D_bb(poses_t, GT_points=GT_points)
 
 
 def sort_path_list(path_list):
