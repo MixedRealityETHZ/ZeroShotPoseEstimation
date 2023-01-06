@@ -22,6 +22,7 @@ from pytorch_lightning import seed_everything
 """Inference & visualize"""
 from src.datasets.normalized_dataset import NormalizedDataset
 from src.sfm.extract_features import confs
+from src.utils.evaluation import pose_distance
 
 seed_everything(12345)
 

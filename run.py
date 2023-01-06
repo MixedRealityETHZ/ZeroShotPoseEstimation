@@ -114,7 +114,7 @@ def sfm(cfg):
     """Reconstruct and postprocess sparse object point cloud, and store point cloud features"""
     data_dirs = cfg.dataset.data_dir
     down_ratio = cfg.sfm.down_ratio
-    crop_images = True #crop_images = True if cfg.hololens else False
+    crop_images = True
     step = 1
     data_dirs = [data_dirs] if isinstance(data_dirs, str) else data_dirs
 
@@ -136,7 +136,6 @@ def sfm(cfg):
         paths['crop_img_root'] = seq_dir + "/color/"
         paths['intrin_dir'] = seq_dir + "/intrin/"
         paths['img_list'] = full_res_img_paths
-        #paths['M_dir'] = None
 
         obj_name = root_dir.split("/")[-1]
         outputs_dir_root = cfg.dataset.outputs_dir.format(obj_name)
