@@ -5,8 +5,10 @@ import numpy as np
 import os.path as osp
 import argparse
 from pathlib import Path
+from tqdm import tqdm
 from transforms3d import affines, quaternions
 from src.utils import data_utils
+from src.bbox_3D_estimation.utils import sort_path_list
 
 
 def get_arkit_default_path(data_dir, AR_annotations=True):
@@ -188,10 +190,59 @@ def parse_video(paths, downsample_rate=5, bbox_3d_homo=None, hw=512, AR_annotati
         index += 1
     cap.release()
 
+def parse_images(paths, downsample_rate=5, hw=512, save_rotations=False):
+    orig_intrin_file = paths['final_intrin_file']
+    crop_img_root = paths['crop_img_root']
+    intrin_dir = paths['intrin_dir']
+    img_list = sort_path_list(paths['img_list'])
 
-def data_process_anno(data_dir, downsample_rate=1, hw=512, AR_annotations=True):
+    for key in paths.keys():
+        if not isinstance(paths[key], list) and not os.path.exists(paths[key]):
+            os.makedirs(paths[key])
 
-    paths = get_arkit_default_path(data_dir, AR_annotations)
+    K, _ = data_utils.get_K(orig_intrin_file)
+    crop_img_paths = []
+    for index, img_path in enumerate(tqdm(img_list)):
+        image = cv2.imread(str(img_path))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        if index % downsample_rate != 0:
+            continue
+
+        save_intrin_path = osp.join(intrin_dir, '{}.txt'.format(index))
+        reproj_box3d_file = osp.join(paths['reproj_box_dir'], '{}.txt'.format(index))
+
+        if not osp.isfile(reproj_box3d_file):
+            continue
+
+        reproj_box3d = np.loadtxt(osp.join(paths['reproj_box_dir'], '{}.txt'.format(index))).astype(int)
+        x0, y0 = reproj_box3d[0], reproj_box3d[1]
+        x1, y1 = reproj_box3d[2], reproj_box3d[3]
+
+        box = np.array([x0, y0, x1, y1])
+        resize_shape = np.array([y1 - y0, x1 - x0])
+        K_crop, K_crop_homo = data_utils.get_K_crop_resize(box, K, resize_shape)
+        image_crop, trans1 = data_utils.get_image_crop_resize(image, box, resize_shape)
+
+        box_new = np.array([0, 0, x1-x0, y1-y0])
+        resize_shape = np.array([hw, hw])
+        K_crop, K_crop_homo = data_utils.get_K_crop_resize(box_new, K_crop, resize_shape)
+        image_crop, trans2 = data_utils.get_image_crop_resize(image_crop, box_new, resize_shape)
+
+        crop_img_file = crop_img_root + f"{index}.png"
+        crop_img_paths.append(crop_img_file)
+
+        if save_rotations:
+            trans_full_to_crop = trans2 @ trans1
+            trans_crop_to_full = np.linalg.inv(trans_full_to_crop)
+            np.savetxt(osp.join(paths['M_dir'], '{}.txt'.format(index)), trans_crop_to_full)
+
+        np.savetxt(save_intrin_path, K_crop)
+        cv2.imwrite(crop_img_file, cv2.cvtColor(image_crop, cv2.COLOR_RGB2BGR))
+
+    return crop_img_paths
+
+def rename_intrinsics_file(paths):
     with open(paths['orig_intrin_file'], 'r') as f:
         lines = [l.strip() for l in f.readlines() if len(l) > 0 and l[0] != '#']
     eles = [[float(e) for e in l.split(',')] for l in lines]
@@ -200,6 +251,13 @@ def data_process_anno(data_dir, downsample_rate=1, hw=512, AR_annotations=True):
     with open(paths['final_intrin_file'], 'w') as f:
         f.write('fx: {0}\nfy: {1}\ncx: {2}\ncy: {3}'.format(fx, fy, cx, cy))
 
+    return fx, fy, cx, cy
+
+def data_process_anno(data_dir, downsample_rate=1, hw=512, AR_annotations=True):
+
+    paths = get_arkit_default_path(data_dir, AR_annotations)
+    fx, fy, cx, cy = rename_intrinsics_file(paths)
+    
     K_homo = np.array([
         [fx, 0, cx, 0],
         [0, fy, cy, 0],

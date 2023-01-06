@@ -63,7 +63,14 @@ class UnsupBbox:
 
         # Bounding boxes
         bbox = extract.extract_bboxes(feature_dict=feature_dict, segmap=segmap)
-        bbox_orig_res = (
+        self.bbox_orig_res = (
             np.array(bbox["bboxes_original_resolution"][0]) / self.downscale_factor
         )
-        return bbox_orig_res
+        return self.bbox_orig_res
+    
+    def save_2d_bbox(self, file_path, bbox_orig_res=None):
+        if bbox_orig_res is None:
+            np.savetxt(file_path, self.bbox_orig_res, delimiter=" ")
+        else:
+            np.savetxt(file_path, bbox_orig_res, delimiter=" ")
+

@@ -185,6 +185,7 @@ def inference_core(cfg, data_root, seq_dir, sfm_model_dir):
             idx += 1
 
     eval_result = evaluator.summarize()
+    print(eval_result)
     obj_name = sfm_model_dir.split('/')[-1]
     seq_name = seq_dir.split('/')[-1]
     eval_utils.record_eval_result(cfg.output.eval_dir, obj_name, seq_name, eval_result)

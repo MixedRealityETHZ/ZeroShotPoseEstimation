@@ -4,8 +4,8 @@ type: inference
 task_name: demo
 num_leaf: 8
 suffix: ''
-save_demo: False
-save_wis3d: False
+save_demo: True
+save_wis3d: True
 use_tracking: False
 
 model:
@@ -24,9 +24,11 @@ max_num_kp3d: 2500
 
 input:
     data_dirs: 
+        - ${scan_data_dir}/0613-adidasshoeright-others adidasshoeright-1
         - ${scan_data_dir}/0606-tiger-others tiger-1
         - ${scan_data_dir}/0609-doll-others doll-3
     sfm_model_dirs: 
+        - ${sfm_model_dir}/0613-adidasshoeright-others 
         - ${sfm_model_dir}/0606-tiger-others
 output:
     vis_dir: ${work_dir}/runs/vis/demo

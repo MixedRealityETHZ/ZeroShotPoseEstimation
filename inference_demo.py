@@ -16,26 +16,26 @@ from src.utils import data_utils, path_utils, eval_utils, vis_utils
 from src.utils.model_io import load_network
 from src.local_feature_2D_detector import LocalFeatureObjectDetector
 from src.deep_spectral_method.detection_2D_utils import UnsupBbox
-
 from pytorch_lightning import seed_everything
+from src.datasets.normalized_dataset import NormalizedDataset
 
 """Inference & visualize"""
-from src.datasets.normalized_dataset import NormalizedDataset
 from src.sfm.extract_features import confs
+from src.utils.evaluation import pose_distance, load_gt_poses, load_current_pose
+from src.evaluators.cmd_evaluator import Evaluator
+import matplotlib.pyplot as plt
 
 seed_everything(12345)
 
 def get_device(no_mps=True):
     if torch.cuda.is_available():
         device = "cuda"
-        compute_on_GPU = True
         logger.info("Running OnePose with GPU, will it work?")
     elif torch.backends.mps.is_available() and not no_mps:
         device = "mps"
         logger.info("Running OnePose with NEURAL ENGINE")
     else:
         device = "cpu"
-        compute_on_GPU = False
         logger.info("Running OnePose with CPU")
 
     return device
@@ -163,10 +163,9 @@ def inference_core(
     seq_dir,
     sfm_model_dir,
     object_det_type="detection",
-    verbose=False,
 ):
-
     BboxPredictor = UnsupBbox(downscale_factor=0.3, device=get_device(no_mps=True))
+    evaluator = Evaluator()
 
     # Load models and prepare data:
     matching_model, extractor_model = load_model(cfg)
@@ -224,6 +223,10 @@ def inference_core(
         img_lists, confs[cfg.network.detection]["preprocessing"]
     )
     loader = DataLoader(dataset, num_workers=1)
+    poses = load_gt_poses(data_dir=seq_dir)
+
+    poses_err = []
+    orient_err = []
 
     for id, data in enumerate(tqdm(loader)):
         img_path = data["path"][0]
@@ -231,8 +234,7 @@ def inference_core(
             inp = data["image"].to(device)
             # Detect object:
             # Use 3D bbox and previous frame's pose to yield current frame 2D bbox:
-            start = time.time()
-            if object_det_type == "features" or id == 0:
+            if object_det_type == "features" :
                 bbox2d, inp_crop, K_crop = local_feature_obj_detector.detect(
                     inp,
                     img_path,
@@ -257,11 +259,6 @@ def inference_core(
                 previous_frame_pose, inliers = pred_poses[id - 1]
                 _, inp_crop, K_crop, = local_feature_obj_detector.previous_pose_detect(
                     img_path, K, previous_frame_pose, box3d
-                )
-
-            if verbose:
-                logger.info(
-                    f"feature matching runtime: {(time.time() - start)%60} seconds"
                 )
 
             # Detect query image(cropped) keypoints and extract descriptors:
@@ -293,10 +290,20 @@ def inference_core(
                 K_crop, mkpts2d, mkpts3d, scale=1000
             )
 
+            # Evaluate:
+            # gt_pose_path = path_utils.get_gt_pose_path_by_color(img_path, det_type=object_det_type)
+            #pose_gt = poses[id]
+            pose_gt = load_current_pose(poses, id)
+            evaluator.evaluate(pose_pred, pose_gt)
+
             # Store previous estimated poses:
             pred_poses[id] = [pose_pred, inliers]
 
-        # Visualize:
+            # Evaluation (roby script)
+            pos_dist, orient_dist = pose_distance(pose_pred, pose_gt)
+            poses_err.append(pos_dist)
+            orient_err.append(orient_dist)
+        
         vis_utils.save_demo_image(
             pose_pred_homo,
             K,
@@ -305,6 +312,15 @@ def inference_core(
             draw_box=len(inliers) > 0,
             save_path=osp.join(paths["vis_box_dir"], f"{id}.jpg"),
         )
+
+    np.savetxt("tiger_translation_eval.txt", poses_err)
+    np.savetxt("tiger_orientation_eval.txt", orient_err)
+
+    eval_result = evaluator.summarize()
+    print(eval_result)
+    obj_name = sfm_model_dir.split('/')[-1]
+    seq_name = seq_dir.split('/')[-1]
+    eval_utils.record_eval_result(cfg.output.eval_dir, obj_name, seq_name, eval_result, poses_err, orient_err)
 
     # Output video to visualize estimated poses:
     vis_utils.make_video(paths["vis_box_dir"], paths["demo_video_path"])

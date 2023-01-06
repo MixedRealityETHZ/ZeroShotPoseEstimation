@@ -8,10 +8,10 @@ from matplotlib import pyplot as plt
 import itertools
 from tqdm import tqdm
 import cv2
+from scipy.spatial.transform import Rotation
 from src.deep_spectral_method.detection_2D_utils import UnsupBbox
 from src.utils import data_utils
 from src.bbox_3D_estimation.plotting import plot_3D_scene
-import sklearn
 
 
 class Detector3D:
@@ -21,7 +21,7 @@ class Detector3D:
         self.poses = None
         self.poses_list = []
 
-    def add_view(self, bbox_t: np.ndarray, pose_t: np.ndarray, poses_orig: list):
+    def add_view(self, bbox_t: np.ndarray, pose_t: np.ndarray):
         if self.bboxes is None:
             self.bboxes = bbox_t
         else:
@@ -32,14 +32,12 @@ class Detector3D:
         else:
             self.poses = np.vstack((self.poses, pose_t))
 
-        self.poses_list.append(poses_orig)
-
-    def detect_3D_box(self):
+    def detect_3D_box(self, plot_3dbbox=False):
         object_idx = 0
         selected_frames = self.bboxes.shape[0]
         self.visibility = np.ones((selected_frames, 1))
         estQs = compute_estimates(self.bboxes, self.K, self.poses, self.visibility)
-        centre, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[object_idx])
+        center, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[object_idx])
 
         # Possible coordinates
         mins = [-ax for (ax) in axes]
@@ -48,97 +46,116 @@ class Detector3D:
         # Coordinates of the points mins and maxs
         points = np.array(list(itertools.product(*zip(mins, maxs))))
 
-        # Points in the camera frame
-        # points = np.dot(points, R.T)
-
-        # Shift correctly the parralelepiped (we want it centered in the origin)
-        # points[:, 0:3] = np.add(centre[None, :], points[:, :3])
-
         self.axes = axes
         self.points = points
-        self.centre = centre
+        self.center = center
         self.R = R
 
-        # Transformation to have coordinates centered in the bounding box (and aligned with it)
-        M = np.empty((4, 4))
-        M[:3, :3] = R
-        M[:3, 3] = centre
-        M[3, :] = [0, 0, 0, 1]
-        # print(M)
-
-        self.M = np.linalg.inv(M)
-
-
-        # gt_p = np.loadtxt(f"data/onepose_datasets/val_data/0606-tiger-others/box3d_corners_GT.txt")
-
-        # plot_3D_scene(
-        # estQs=estQs,
-        # gtQs=gt_p,
-        # Ms_t=self.poses,
-        # dataset="tiger",
-        # save_output_images=False,
-        # points=points,
-        # GT_points=gt_p 
-        # )
-        # plt.show()
-
+        if plot_3dbbox:
+            plot_3D_scene(
+                estQs=estQs,
+                gtQs=None,
+                Ms_t=self.poses,
+                dataset="tiger",
+                save_output_images=False,
+                points=points,
+                GT_points=None 
+            )
+            plt.show()
+        
+        return center, R
 
     def save_3D_box(self, data_root):
         np.savetxt(data_root + "/box3d_corners.txt", self.points, delimiter=" ")
-
-    def shift_centres(self):
-        shifted_poses = []
-        for pose in self.poses_list:
-            inverted = np.linalg.inv(pose[0])
-            inverted = np.dot(self.M, inverted)
-            original = np.linalg.inv(inverted)
-            shifted_poses.append(original)
-        self.shifted_poses = shifted_poses
-
-    def save_poses(self, seq_dir):
-        """Saves poses in the OnePose format (which is inverted respect to the Hololens format)"""
-        shift_pose_dir = f"{seq_dir}/poses_shifted/"
-        os.makedirs(shift_pose_dir, exist_ok=True)
-        for idx, pose in enumerate(self.shifted_poses):
-            np.savetxt(f"{shift_pose_dir}{idx}.txt", pose, delimiter=" ")
 
     def save_dimensions(self, data_root):
         np.savetxt(data_root + "/box3d_dimensions.txt", self.axes, delimiter=" ")
 
 
-def predict_3D_bboxes(
+def predict_3D_bboxes_wrapper(
     full_res_img_paths,
-    intrisics_path,
+    intrinsics_path,
     poses_paths,
     data_root,
-    seq_dir,
     step=1,
     downscale_factor=0.3,
-    compute_on_GPU="cpu",
-    hololens=False
+    device="cpu",
+    root_2d_bbox=None,
 ):  
     full_res_img_paths = sort_path_list(full_res_img_paths)
     poses_paths = sort_path_list(poses_paths)
-    _K, _ = data_utils.get_K(intrisics_path) 
+    _K, _ = data_utils.get_K(intrinsics_path) 
 
     DetectorBox3D = Detector3D(_K)
-    BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, device=compute_on_GPU)
+    BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, device=device)
 
     for id, img_path in enumerate(tqdm(full_res_img_paths)):
         if id % step == 0 or id == 0:
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            poses = read_list_poses([poses_paths[id]], hololens=hololens)
-            poses_orig = read_list_poses_orig([poses_paths[id]])
-            
-            bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
-            DetectorBox3D.add_view(bbox_orig_res, poses, poses_orig)
+            poses = read_list_poses([poses_paths[id]])
 
-    DetectorBox3D.detect_3D_box()
+            if not os.path.exists(root_2d_bbox):
+                os.makedirs(root_2d_bbox)
+
+            path_to_2dbbox=root_2d_bbox + f"{id}.txt"
+            if os.path.exists(path_to_2dbbox):
+                bbox_orig_res = np.loadtxt(path_to_2dbbox)
+            else:
+                bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
+
+            BboxPredictor.save_2d_bbox(file_path=path_to_2dbbox, bbox_orig_res=bbox_orig_res)
+            DetectorBox3D.add_view(bbox_t=bbox_orig_res, pose_t=poses)
+
+    center, R = DetectorBox3D.detect_3D_box()
     DetectorBox3D.save_3D_box(data_root)
-    DetectorBox3D.shift_centres()
-    DetectorBox3D.save_poses(seq_dir)
     DetectorBox3D.save_dimensions(data_root)
+    return center, R
+
+def shift_poses(poses_list, M):
+    # poses you get here are from CAMERA to WORLD
+    # M is from WORLD to OBJECT
+    shifted_poses = []
+    for pose in poses_list:
+        #inverted = pose
+        #inverted = np.linalg.inv(pose)
+        # inverted = np.dot(M, inverted)
+        # original = np.linalg.inv(inverted)
+        new_pose = pose @ np.linalg.inv(M)
+        shifted_poses.append(new_pose)
+    return shifted_poses
+
+def save_poses(seq_dir, shifted_poses, folder_to_save="poses_inverted"):
+    """Saves poses in the OnePose format (which is inverted respect to the Hololens format)"""
+    shift_pose_inv_dir = f"{seq_dir}/{folder_to_save}/"
+    shift_pose_dir = f"{seq_dir}/poses/"
+    poses_direc = [shift_pose_inv_dir, shift_pose_dir]
+
+    for pose_dir in poses_direc:
+        os.makedirs(pose_dir, exist_ok=True)
+        for idx, pose in enumerate(shifted_poses):
+            if pose.shape == (4,3):
+                pose_trasp = pose.T
+                pose_final = np.vstack((pose_trasp, np.array([0,0,0,1])))
+                assert pose_final.shape == (4,4)
+            else:
+                pose_final = pose
+            np.savetxt(f"{pose_dir}{idx}.txt", pose_final, delimiter=" ")
+        print(f"\n Saving poses in {pose_dir}")
+
+    return poses_direc
+
+
+def shift_poses_to_object_center(poses_paths, center, R, seq_dir, hololens):
+    # Transformation to have coordinates centered in the bounding box (and aligned with it)
+    M = np.empty((4, 4))
+    M[:3, :3] = R
+    M[:3, 3] = center
+    M[3, :] = [0, 0, 0, 1]
+    # read poses
+    poses_list = read_poses_store_to_list(poses_paths)
+    shifted_poses = shift_poses(poses_list, M)
+    save_poses(seq_dir, shifted_poses, folder_to_save="shifted_poses")
 
 
 def sort_path_list(path_list):
@@ -147,31 +164,72 @@ def sort_path_list(path_list):
     return list(ordered_dict.values())
 
 
-def read_list_poses(list, hololens=False):
+def read_list_poses(list):
+    poses = []
     for idx, file_path in enumerate(list):
         with open(file_path) as f_input:
-            if hololens:
-                pose = np.transpose(np.linalg.inv(np.loadtxt(f_input))[:3, :])  # TODO poses are inverted when from hololens
-            else:
-                pose = np.transpose(np.loadtxt(f_input)[:3, :])
+            pose_homo = np.loadtxt(f_input)
+            pose = np.transpose(pose_homo[:3, :])
             if idx == 0:
                 poses = pose
             else:
                 poses = np.concatenate((poses, pose), axis=0)
     return poses
 
+def invert_pose(pose: np.ndarray):
+    # untranspose pose
+    curr_pose = pose.T
+    # add line of 0001
+    trasp_pose = np.vstack((curr_pose, np.array([0,0,0,1])))
+    #invert
+    inverted_pose = np.linalg.inv(trasp_pose)
+    # back transpose
+    back_trasp_pose = inverted_pose.T
+    #return trasposed version without 0001
+    return back_trasp_pose[:,0:3]
 
-def read_list_poses_orig(list):
+def convert_left_to_right_hand_pose(original_pose):
+    pose = original_pose.copy().T
+    # Extract rotation matrix and translation vector from left-handed pose T
+    R = pose[:3, :3]
+    t = pose[:3, 3]
+    
+    # Negate first element of translation vector
+    t[1] = -t[1]
+    new_rot = R
+    #rot = Rotation.from_matrix(R)
+    #quat = rot.as_quat()
+    #quat[0:3] = -quat[0:3]
+    #new_rot = Rotation.from_quat(quat).as_matrix()
+
+    # R_transform = np.array([[-1, 0, 0],
+    #                 [0, -1, 0],
+    #                 [0, 0, 1]])
+
+    # rotate about z of 90 and about y of 90
+    R_transform = Rotation.from_euler('z', 90, degrees=True).as_matrix()
+
+    new_rot_from_trasf = R_transform @ new_rot @ np.linalg.inv(R_transform)
+
+    # Construct right-handed pose T'
+    T_prime = np.eye(4)
+    T_prime[:3, :3] = new_rot_from_trasf
+    T_prime[:3, 3] = t
+
+    return T_prime.T[:,:3]
+
+
+def read_poses_store_to_list(paths):
     poses = []
-    for idx, file_path in enumerate(list):
+    for file_path in paths:
         with open(file_path) as f_input:
             poses.append(np.linalg.inv(np.loadtxt(f_input)))
     return poses
 
 
-def read_list_box(list):
+def read_list_box(paths):
     corpus = []
-    for file_path in list:
+    for file_path in paths:
         with open(file_path) as f_input:
             line = f_input.read()
             corpus.append([float(number) for number in line.split(",")])
@@ -204,10 +262,7 @@ def get_data(dataset, random_downsample):
                 3 * old_shape + random_indices,
             ]
         )
-        # print(random_indices)
         Ms_t = Ms_t[random_indices, :]
-        # print(Ms_t.shape)
-        # print(bbs)
 
     visibility = np.ones((bbs.shape[0], 1))
 

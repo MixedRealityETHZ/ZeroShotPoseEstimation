@@ -2,15 +2,19 @@ import json
 import os
 import glob
 import hydra
+import torch
+import numpy as np
+from tqdm import tqdm
 
 import os.path as osp
 from loguru import logger
 from pathlib import Path
 from omegaconf import DictConfig
 
-from src.bbox_3D_estimation.utils import predict_3D_bboxes
-
-from src.bbox_3D_estimation.utils import predict_3D_bboxes
+from src.bbox_3D_estimation.utils import predict_3D_bboxes_wrapper, shift_poses_to_object_center
+from src.utils.parse_scanned_data import parse_images
+from src.utils import data_utils
+from src.bbox_3D_estimation.utils import sort_path_list, read_list_poses, invert_pose, save_poses
 
 
 def merge_(
@@ -110,6 +114,8 @@ def sfm(cfg):
     """Reconstruct and postprocess sparse object point cloud, and store point cloud features"""
     data_dirs = cfg.dataset.data_dir
     down_ratio = cfg.sfm.down_ratio
+    crop_images = True
+    step = 1
     data_dirs = [data_dirs] if isinstance(data_dirs, str) else data_dirs
 
     for data_dir in data_dirs:
@@ -117,46 +123,86 @@ def sfm(cfg):
         root_dir, sub_dirs = data_dir.split(" ")[0], data_dir.split(" ")[1:]
 
         # Parse image, intrinsics and poses directories:
-        img_paths, poses_paths, full_res_img_paths = [], [], []
-        for sub_dir in sub_dirs:
-            seq_dir = osp.join(root_dir, sub_dir)
-            img_paths += glob.glob(str(Path(seq_dir)) + "/color/*.png", recursive=True)
-            full_res_img_paths += glob.glob(str(Path(seq_dir)) + "/color_full/*.png", recursive=True)
-            poses_paths += glob.glob(str(Path(seq_dir)) + "/poses/*.txt", recursive=True)
-            intrinsics_path = str(Path(seq_dir)) + "/intrinsics.txt"
-            poses_paths += glob.glob(str(Path(seq_dir)) + "/poses/*.txt", recursive=True)
-            intrinsics_path = str(Path(seq_dir)) + "/intrinsics.txt"
+        poses_paths, full_res_img_paths = [], []
+        paths = {}
+        seq_dir = str(Path(osp.join(root_dir, sub_dirs[0])))
 
-        # Choose less images from the list to build the sfm model
+        full_res_img_paths += glob.glob(seq_dir + "/color_full/*.png", recursive=True)
+        poses_paths += glob.glob(seq_dir + "/poses/*.txt", recursive=True)
+        intrinsics_path = seq_dir + "/intrinsics.txt"
 
-        down_img_lists = []
-        for img_file in img_paths:
-            index = int(img_file.split("/")[-1].split(".")[0])
-            if index % down_ratio == 0:
-                down_img_lists.append(img_file)
+        paths['final_intrin_file'] = intrinsics_path
+        paths['reproj_box_dir'] = seq_dir + "/reproj_box/"
+        paths['crop_img_root'] = seq_dir + "/color/"
+        paths['intrin_dir'] = seq_dir + "/intrin/"
+        paths['img_list'] = full_res_img_paths
+
+        obj_name = root_dir.split("/")[-1]
+        outputs_dir_root = cfg.dataset.outputs_dir.format(obj_name)
+
+        poses_paths = sort_path_list(poses_paths)
+        if cfg.hololens:
+            all_poses_ = []
+            for id, curr_pose_path in enumerate(tqdm(poses_paths)):
+                # POTENTIAL BUG IN USING THIS STEP, NOT ALL IMAGES POSES ARE UPDATED
+                if id % step == 0 or id == 0:
+                    # if Hololens True then we invert the poses after reading them
+                    original_pose = read_list_poses([curr_pose_path])
+                    if cfg.hololens:
+                        #right_h_pose = convert_left_to_right_hand_pose(original_pose)
+                        pose = invert_pose(original_pose)
+                        all_poses_.append(pose)
+
+            poses_path_used = save_poses(seq_dir=seq_dir, shifted_poses=all_poses_, folder_to_save="inverted_poses")
+
+        # Begin predict 3d bboxes
+        if not os.path.exists(root_dir + "/box3d_corners.txt") or cfg.redo_3d_bbox:
+            center_3d_box, R_3d_box = predict_3D_bboxes_wrapper(
+                device="cuda" if torch.cuda.is_available() else "cpu",
+                full_res_img_paths=full_res_img_paths,
+                root_2d_bbox=paths['reproj_box_dir'],
+                intrinsics_path=intrinsics_path,
+                poses_paths=poses_paths,
+                data_root=root_dir,
+                step=step,
+            )
+
+            # Shift poses
+            if cfg.hololens:
+                shift_poses_to_object_center(
+                        poses_paths=poses_paths, 
+                        center=center_3d_box, 
+                        R=R_3d_box, 
+                        seq_dir=seq_dir, 
+                        hololens=cfg.hololens)
+
+        # Crop images and save them if you have MINIMAL folder structure
+        if crop_images:
+            img_paths = parse_images(paths, downsample_rate=1, hw=512)
+        else:
+            img_paths = glob.glob(str(Path(seq_dir)) + "/color/*.png", recursive=True)
+            if not os.path.exists(paths['intrin_dir']):
+                os.makedirs(paths['intrin_dir'])
+                K, _ = data_utils.get_K(intrinsics_path) 
+                for index, _ in enumerate(img_paths):
+                    np.savetxt(paths['intrin_dir'] + f"{index}.txt", K)
 
         if len(img_paths) == 0:
             logger.info(f"No png image in {root_dir}")
             continue
 
-        obj_name = root_dir.split("/")[-1]
-        outputs_dir_root = cfg.dataset.outputs_dir.format(obj_name)
-
-        # Begin predict 3d bboxes
-        predict_3D_bboxes(
-            intrisics_path=intrinsics_path,
-            full_res_img_paths=full_res_img_paths,
-            poses_paths=poses_paths,
-            data_root=root_dir,
-            seq_dir = seq_dir,
-            compute_on_GPU="cuda",
-            step=1,
-            hololens=cfg.hololens
-        )
+        # Choose less images from the list, to build the sfm model
+        down_img_lists = []
+        for img_file in img_paths:
+            index = int(img_file.split("/")[-1].split(".")[0])
+            if index % down_ratio == 0:
+                down_img_lists.append(img_file)
+        
+        down_img_lists = sort_path_list(down_img_lists)
 
         # Begin SfM and postprocess:
         sfm_core(cfg, down_img_lists, outputs_dir_root)
-        postprocess(cfg, down_img_lists, root_dir, outputs_dir_root)
+        postprocess(cfg, down_img_lists, root_dir, outputs_dir_root, filter_with_3d_bbox=True)
 
 
 def sfm_core(cfg, img_lists, outputs_dir_root):
@@ -197,7 +243,7 @@ def sfm_core(cfg, img_lists, outputs_dir_root):
         )
 
         # Reconstruct 3D point cloud with known image poses:
-        generate_empty.generate_model(img_lists, empty_dir)
+        generate_empty.generate_model(img_lists, empty_dir, do_ba=True)
         triangulation.main(
             deep_sfm_dir,
             empty_dir,
@@ -206,16 +252,13 @@ def sfm_core(cfg, img_lists, outputs_dir_root):
             feature_out,
             matches_out,
             image_dir=None,
-            skip_geometric_verification=True,
+            skip_geometric_verification=False,
         )
 
 
-def postprocess(cfg, img_lists, root_dir, outputs_dir_root):
+def postprocess(cfg, img_lists, root_dir, outputs_dir_root, filter_with_3d_bbox=True):
     """Filter points and average feature"""
     from src.sfm.postprocess import filter_points, feature_process, filter_tkl
-
-    # Probably here is where they use the first box
-    bbox_path = osp.join(root_dir, "box3d_corners.txt")
 
     # Construct output directory structure:
     outputs_dir = osp.join(
@@ -234,8 +277,12 @@ def postprocess(cfg, img_lists, root_dir, outputs_dir_root):
         model_path, points_count_list, track_length, outputs_dir
     )  # For visualization only
 
+    # Probably here is where they use the first box
+    bbox_path = osp.join(root_dir, "box3d_corners.txt")
+
     # Leverage the selected feature track length threshold and 3D BBox to filter 3D points:
-    xyzs, points_idxs = filter_points.filter_3d(model_path, track_length, bbox_path)
+    mask_filtering = not filter_with_3d_bbox
+    xyzs, points_idxs = filter_points.filter_3d(model_path, track_length, bbox_path, mask_filtering=mask_filtering)
     # Merge 3d points by distance between points
     merge_xyzs, merge_idxs = filter_points.merge(xyzs, points_idxs, dist_threshold=1e-3)
 

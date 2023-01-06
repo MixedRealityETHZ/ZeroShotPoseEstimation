@@ -10,7 +10,7 @@ import cv2
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from src.utils import data_utils
 from deep_spectral_method.detection_2D_utils import UnsupBbox
-from bbox_3D_estimation.utils import sort_path_list, predict_3D_bboxes
+from bbox_3D_estimation.utils import sort_path_list, predict_3D_bboxes_wrapper
 
 
 if __name__ == "__main__":
@@ -28,10 +28,10 @@ if __name__ == "__main__":
     )
     img_lists = sort_path_list(img_lists)
 
-    predict_3D_bboxes(
+    predict_3D_bboxes_wrapper(
         BboxPredictor=BboxPredictor,
         full_res_img_paths=img_lists,
         poses_paths=poses_list,
-        intrisics_path=K,
+        intrinsics_path=K,
         data_root=data_root,
     )

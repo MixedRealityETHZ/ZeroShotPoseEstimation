@@ -166,7 +166,7 @@ def plot_camera(M, figure_axes):
     Minv = np.linalg.inv(
         Mhom
     )  # Inverse transformation matrix (still Homogeneous representation).
-    Minv /= Minv[3, 3]
+    #Minv /= Minv[3, 3]
 
     # Apply the rotation.
     R = Minv[0:3, 0:3]
@@ -180,9 +180,9 @@ def plot_camera(M, figure_axes):
     y = points[1, :].reshape(2, 5)
     z = points[2, :].reshape(2, 5)
 
-    # figure_axes.plot_wireframe(
-    #     x, y, z, rstride=1, cstride=1, color=[0, 0, 0], linewidth=0.5
-    # )
+    figure_axes.plot_wireframe(
+        x, y, z, rstride=1, cstride=1, color=[0, 0, 0], linewidth=0.5
+    )
     figure_axes.scatter(t[0], t[1], t[2])
 
 
@@ -231,13 +231,13 @@ def plot_3D_scene(
     ]
 
     # plot sides
-    figure_axes.add_collection3d(
-        Poly3DCollection(
-            verts, facecolors="cyan", linewidths=1, edgecolors="r", alpha=0.25
-        )
-    )
+    # figure_axes.add_collection3d(
+    #     Poly3DCollection(
+    #         verts, facecolors="cyan", linewidths=1, edgecolors="r", alpha=0.25
+    #     )
+    # )
 
-    figure_axes.scatter(points[:, 0], points[:, 1], points[:, 2])
+    # figure_axes.scatter(points[:, 0], points[:, 1], points[:, 2])
 
     if GT_points is not None:
         Z = GT_points
