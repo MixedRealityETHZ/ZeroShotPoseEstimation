@@ -4,13 +4,15 @@ import os.path as osp
 
 from pathlib import Path
 
-def record_eval_result(out_dir, obj_name, seq_name, eval_result):
+def record_eval_result(out_dir, obj_name, seq_name, eval_result, pos_dist, orient_dist):
     Path(out_dir).mkdir(exist_ok=True, parents=True)
 
     out_file = osp.join(out_dir, obj_name + seq_name + '.txt')
     f = open(out_file, 'w')
     for k, v in eval_result.items():
         f.write(f'{k}: {v}\n')
+    for id, (pose, orient) in enumerate(zip(pos_dist, orient_dist)):
+        f.write(f"frame {id}, has a pose dist error of: {pose} and a orientation error of: {orient} \n")
 
     f.close()
 

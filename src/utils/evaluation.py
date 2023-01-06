@@ -45,6 +45,6 @@ def pose_distance(pose1, pose2):
 def load_gt_poses(data_dir):
 
     poses_dir = osp.join(data_dir, "poses")
-    pose_list += glob.glob(poses_dir + "/*.txt", recursive=True)
+    pose_list = glob.glob(poses_dir + "/*.txt", recursive=True)
     pose_list = natsort.natsorted(pose_list)
-
+    return pose_list

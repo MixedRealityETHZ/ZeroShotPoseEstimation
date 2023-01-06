@@ -22,7 +22,8 @@ from pytorch_lightning import seed_everything
 """Inference & visualize"""
 from src.datasets.normalized_dataset import NormalizedDataset
 from src.sfm.extract_features import confs
-from src.utils.evaluation import pose_distance
+from src.utils.evaluation import pose_distance, load_gt_poses
+from src.evaluators.cmd_evaluator import Evaluator
 
 seed_everything(12345)
 
@@ -166,6 +167,7 @@ def inference_core(
     object_det_type="detection",
 ):
     BboxPredictor = UnsupBbox(downscale_factor=0.3, device=get_device(no_mps=True))
+    evaluator = Evaluator()
 
     # Load models and prepare data:
     matching_model, extractor_model = load_model(cfg)
@@ -223,6 +225,10 @@ def inference_core(
         img_lists, confs[cfg.network.detection]["preprocessing"]
     )
     loader = DataLoader(dataset, num_workers=1)
+    poses = load_gt_poses(data_dir=seq_dir)
+
+    poses_err = []
+    orient_err = []
 
     for id, data in enumerate(tqdm(loader)):
         img_path = data["path"][0]
@@ -286,8 +292,20 @@ def inference_core(
                 K_crop, mkpts2d, mkpts3d, scale=1000
             )
 
+            # Evaluate:
+            # gt_pose_path = path_utils.get_gt_pose_path_by_color(img_path, det_type=object_det_type)
+            pose_gt = poses[id]
+            pose_gt = np.loadtxt(pose_gt)
+            evaluator.evaluate(pose_pred, pose_gt)
+
             # Store previous estimated poses:
             pred_poses[id] = [pose_pred, inliers]
+
+            # Evaluation (roby script)
+            pos_dist, orient_dist = pose_distance(pose_pred, pose_gt)
+            # print(f"frame {id}, has a pose dist error of: {pos_dist} and a orientation error of: {orient_dist}")
+            poses_err.append(pos_dist)
+            orient_err.append(orient_dist)
 
         # Visualize:
         vis_utils.save_demo_image(
@@ -298,6 +316,12 @@ def inference_core(
             draw_box=len(inliers) > 0,
             save_path=osp.join(paths["vis_box_dir"], f"{id}.jpg"),
         )
+
+    eval_result = evaluator.summarize()
+    print(eval_result)
+    obj_name = sfm_model_dir.split('/')[-1]
+    seq_name = seq_dir.split('/')[-1]
+    eval_utils.record_eval_result(cfg.output.eval_dir, obj_name, seq_name, eval_result, poses_err, orient_err)
 
     # Output video to visualize estimated poses:
     vis_utils.make_video(paths["vis_box_dir"], paths["demo_video_path"])
