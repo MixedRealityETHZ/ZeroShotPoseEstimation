@@ -16,28 +16,26 @@ from src.utils import data_utils, path_utils, eval_utils, vis_utils
 from src.utils.model_io import load_network
 from src.local_feature_2D_detector import LocalFeatureObjectDetector
 from src.deep_spectral_method.detection_2D_utils import UnsupBbox
-
 from pytorch_lightning import seed_everything
+from src.datasets.normalized_dataset import NormalizedDataset
 
 """Inference & visualize"""
-from src.datasets.normalized_dataset import NormalizedDataset
 from src.sfm.extract_features import confs
-from src.utils.evaluation import pose_distance, load_gt_poses
+from src.utils.evaluation import pose_distance, load_gt_poses, load_current_pose
 from src.evaluators.cmd_evaluator import Evaluator
+import matplotlib.pyplot as plt
 
 seed_everything(12345)
 
 def get_device(no_mps=True):
     if torch.cuda.is_available():
         device = "cuda"
-        compute_on_GPU = True
         logger.info("Running OnePose with GPU, will it work?")
     elif torch.backends.mps.is_available() and not no_mps:
         device = "mps"
         logger.info("Running OnePose with NEURAL ENGINE")
     else:
         device = "cpu"
-        compute_on_GPU = False
         logger.info("Running OnePose with CPU")
 
     return device
@@ -294,8 +292,8 @@ def inference_core(
 
             # Evaluate:
             # gt_pose_path = path_utils.get_gt_pose_path_by_color(img_path, det_type=object_det_type)
-            pose_gt = poses[id]
-            pose_gt = np.loadtxt(pose_gt)
+            #pose_gt = poses[id]
+            pose_gt = load_current_pose(poses, id)
             evaluator.evaluate(pose_pred, pose_gt)
 
             # Store previous estimated poses:
@@ -303,11 +301,9 @@ def inference_core(
 
             # Evaluation (roby script)
             pos_dist, orient_dist = pose_distance(pose_pred, pose_gt)
-            # print(f"frame {id}, has a pose dist error of: {pos_dist} and a orientation error of: {orient_dist}")
             poses_err.append(pos_dist)
             orient_err.append(orient_dist)
-
-        # Visualize:
+        
         vis_utils.save_demo_image(
             pose_pred_homo,
             K,
@@ -316,6 +312,9 @@ def inference_core(
             draw_box=len(inliers) > 0,
             save_path=osp.join(paths["vis_box_dir"], f"{id}.jpg"),
         )
+
+    np.savetxt("tiger_translation_eval.txt", poses_err)
+    np.savetxt("tiger_orientation_eval.txt", orient_err)
 
     eval_result = evaluator.summarize()
     print(eval_result)

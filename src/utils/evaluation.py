@@ -8,6 +8,7 @@ import numpy as np
 import glob
 import os.path as osp
 import natsort
+import matplotlib.pyplot as plt
 
 def matrix_to_euler(R):
   # Extract the yaw angle
@@ -48,3 +49,72 @@ def load_gt_poses(data_dir):
     pose_list = glob.glob(poses_dir + "/*.txt", recursive=True)
     pose_list = natsort.natsorted(pose_list)
     return pose_list
+
+
+def load_current_pose(pose_list, ind):
+    return np.loadtxt(pose_list[ind])
+
+def prepare_data(error_1, error_2, error_3):
+    data = []
+    for error in (error_1, error_2, error_3):
+        mean = np.mean(error)
+        mean_plot = [mean]*len(error)
+        flier_high = [mean + 3 * np.std(error)]*len(error)
+        flier_low = [mean - 3 * np.std(error)]*len(error)
+        data.append(np.concatenate((error, mean_plot, flier_high, flier_low)))
+    return data
+
+
+def plot_results(error_1, error_2, error_3, rot_error_1, rot_error_2, rot_error_3):
+    # produce a plot of pos error and orientation error
+    fig1, (ax1,ax2) = plt.subplots(nrows=1, ncols=2, figsize=(9, 4))
+    data_pos = prepare_data(error_1, error_2, error_3) 
+    data_rot = prepare_data(rot_error_1, rot_error_2, rot_error_3)
+
+    labels = ["easy", "medium", "hard"]
+    colors = ['pink', 'lightblue', 'lightgreen']
+
+    ax1.set_title('Position error')
+    ax2.set_title('Orientation error')
+    ax1.set_ylabel("[m] Error in meters")
+    ax2.set_ylabel("[rad] Error in radiants")
+
+    bplot = ax1.boxplot(data_pos,                     
+                    vert=True,  # vertical box alignment
+                    patch_artist=True,  # fill with color
+                    labels=labels)  # will be used to label x-ticks)
+    bplot1 = ax2.boxplot(data_rot,                    
+                    vert=True,  # vertical box alignment
+                    patch_artist=True,  # fill with color
+                    labels=labels)  # will be used to label x-ticks))
+
+    for patch, color in zip(bplot['boxes'], colors):
+        patch.set_facecolor(color)
+    for patch, color in zip(bplot1['boxes'], colors):
+        patch.set_facecolor(color)
+
+    for ax in [ax1, ax2]:
+        ax.yaxis.grid(True)
+    
+    ax1.set_ylim([-1, 2])
+
+    plt.savefig("myplot")
+
+if __name__ == "__main__":
+    tiger_translation_eval = np.loadtxt("tiger_translation_eval.txt")
+    tiger_orientation_eval = np.loadtxt("tiger_orientation_eval.txt")
+
+    adidas_translation_eval = np.loadtxt("adidas_translation_eval.txt")
+    adidas_orientation_eval = np.loadtxt("adidas_orientation_eval.txt")
+
+    dinosaurcup_translation_eval = np.loadtxt("dinosaurcup_translation_eval.txt")
+    dinosaurcup_orientation_eval = np.loadtxt("dinosaurcup_orientation_eval.txt")
+
+    plot_results(
+        tiger_translation_eval, 
+        adidas_translation_eval, 
+        dinosaurcup_translation_eval, 
+        tiger_orientation_eval, 
+        adidas_orientation_eval, 
+        dinosaurcup_orientation_eval
+        )
