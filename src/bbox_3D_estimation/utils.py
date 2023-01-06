@@ -41,6 +41,7 @@ class Detector3D:
         estQs = compute_estimates(self.bboxes, self.K, self.poses, self.visibility)
         centre, axes, R = dual_quadric_to_ellipsoid_parameters(estQs[object_idx])
 
+        print("Axes = ", axes)
         # Possible coordinates
         mins = [-ax for (ax) in axes]
         maxs = [ax for (ax) in axes]
@@ -97,7 +98,7 @@ class Detector3D:
             gtQs=None,
             Ms_t=poses,
             dataset="tiger",
-            save_output_images=False,
+            save_output_images=True,
             points=self.points,
             GT_points=None 
         )
@@ -120,22 +121,23 @@ def predict_3D_bboxes(
     _K, _ = data_utils.get_K(intrisics_path) 
 
     DetectorBox3D = Detector3D(_K)
-    BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, device=compute_on_GPU)
+    BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, device=compute_on_GPU, filter = True)
 
 
     for id, img_path in enumerate(tqdm(full_res_img_paths)):
         if id % step == 0 or id == 0:
+            
             image = cv2.imread(str(img_path))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
             poses = read_list_poses([poses_paths[id]], hololens=hololens)
             poses_orig = read_list_poses_orig([poses_paths[id]])
             bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
 
-        
             
             ##--------Plotting the RGB image---------
             image_2 = image.copy()
-            limits = bbox_orig_res[0]
+            limits = bbox_orig_res
             start_point = (int(limits[0]), int(limits[1]))
             end_point = (int(limits[2]), int(limits[3]))
 
@@ -147,23 +149,13 @@ def predict_3D_bboxes(
             # Draw a rectangle with blue line borders of thickness of 2 px
             image_2 = cv2.rectangle(image_2, start_point, end_point, color, thickness)
 
-            if len(bbox_orig_res[1]):
-                limits_2 = bbox_orig_res[1]
-                start_point_2 = (int(limits_2[0]), int(limits_2[1]))
-                end_point_2 = (int(limits_2[2]), int(limits_2[3]))
-                # Blue color in BGR
-                color_2 = (0, 255, 0)
-                # Draw a rectangle with blue line borders of thickness of 2 px
-                image_2 = cv2.rectangle(image_2, start_point_2, end_point_2, color_2, thickness)
-            
+           
             cv2.imshow("Image", image_2)
+            #cv2.imwrite('/Users/diego/Desktop/Escritorio_MacBook_Pro_de_Diego/ETH/Third_Semester/Mixed_Reality/Real_2/ZeroShotPoseEstimation/data/onepose_datasets/val_data/0620-dinosaurcup-bottle/dinosaurcup-1/detection_2/'+str(id)+ '.jpg', image_2)
+            cv2.waitKey(1)
             
-            cv2.imwrite('/Users/diego/Desktop/Escritorio_MacBook_Pro_de_Diego/ETH/Third_Semester/Mixed_Reality/Real_2/ZeroShotPoseEstimation/data/onepose_datasets/val_data/0620-dinosaurcup-bottle/dinosaurcup-1/detection_2/'+str(id)+ '.jpg', image_2)
-            #cv2.waitKey(1)
             
             #1 is for the bbox without a filter, 0 is with filter
-            bbox_orig_res = bbox_orig_res[1]
-
             DetectorBox3D.add_view(bbox_orig_res, poses, poses_orig)
 
     DetectorBox3D.detect_3D_box()

@@ -3,7 +3,7 @@ data_dir: ${work_dir}/data
 print_config: true
 type: sfm
 redo: true
-hololens: true
+hololens: false
 scan_data_dir: ${work_dir}/data/onepose_datasets/val_data
 dataset:
   max_num_kp3d: 2500

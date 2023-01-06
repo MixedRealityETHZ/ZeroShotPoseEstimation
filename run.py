@@ -143,6 +143,9 @@ def sfm(cfg):
         obj_name = root_dir.split("/")[-1]
         outputs_dir_root = cfg.dataset.outputs_dir.format(obj_name)
 
+        print("Hololens flag = ", cfg.hololens)
+        print("Poses = ", poses_paths)
+        print(cfg.data_dir)
         # Begin predict 3d bboxes
         predict_3D_bboxes(
             intrisics_path=intrinsics_path,
@@ -155,6 +158,8 @@ def sfm(cfg):
             hololens=cfg.hololens
         )
 
+        
+        
         # Begin SfM and postprocess:
         print("Begin of SFM")
         sfm_core(cfg, down_img_lists, outputs_dir_root)

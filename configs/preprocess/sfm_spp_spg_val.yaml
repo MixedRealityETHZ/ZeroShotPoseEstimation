@@ -3,7 +3,7 @@
 type: sfm
 work_dir: ${hydra:runtime.cwd}
 redo: True
-hololens: True
+hololens: False
 
 # scan_data_dir: ${work_dir}/data/onepose_datasets/val_data
 scan_data_dir: ${work_dir}/data/onepose_datasets/val_data

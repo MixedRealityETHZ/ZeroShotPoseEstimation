@@ -10,8 +10,9 @@ import matplotlib.pyplot as plt
 
 
 class UnsupBbox:
-    def __init__(self, downscale_factor=0.6, device="cpu") -> None:
-        downscale_factor=0.6
+    def __init__(self, downscale_factor=0.6, device="cpu", filter = False) -> None:
+        if filter:
+            downscale_factor=0.6
         self.model_name = "dino_vits16"
         self.num_workers = 0  # decrease this if out_of_memory error
         self.downscale_factor = downscale_factor
@@ -63,20 +64,34 @@ class UnsupBbox:
 
         eigs_dict_gaussian = eigs_dict.copy()
 
-        # small segmentation, use of fitting curve
-        segmap = extract.gaussian_fitting(
-        feature_dict=feature_dict,
-        eigs_dict=eigs_dict_gaussian,
-        fitting_model=self.fitting_model
-        )
+        #Use of the filter, by default is set to False
+        if filter:
+            # small segmentation, use of fitting curve
+            segmap = extract.gaussian_fitting(
+            feature_dict=feature_dict,
+            eigs_dict=eigs_dict_gaussian,
+            fitting_model=self.fitting_model
+            )
 
-        bbox = extract.extract_bboxes(
-        feature_dict=feature_dict,
-        segmap=segmap,
-        )
-        
-        #If we cannot find a solution with the filter then use the original bbox
-        if not bbox['bboxes']:
+            bbox = extract.extract_bboxes(
+            feature_dict=feature_dict,
+            segmap=segmap,
+            )
+            print("Filter")
+            print(bbox['bboxes'])
+            
+            #If we cannot find a solution with the filter then use the original bbox
+            if not bbox['bboxes']:
+                # small Segmentation
+                segmap = extract.extract_single_region_segmentations(
+                    feature_dict=feature_dict, eigs_dict=eigs_dict
+                )
+                # Bounding boxes
+                bbox = extract.extract_bboxes(feature_dict=feature_dict, segmap=segmap)
+            
+            
+        else:
+
             # small Segmentation
             segmap = extract.extract_single_region_segmentations(
                 feature_dict=feature_dict, eigs_dict=eigs_dict
@@ -85,20 +100,6 @@ class UnsupBbox:
             bbox = extract.extract_bboxes(feature_dict=feature_dict, segmap=segmap)
         
         bbox_orig_res = (
-            np.array(bbox["bboxes_original_resolution"][0]) / self.downscale_factor
-        )
-
-        # small Segmentation
-        segmap_2 = extract.extract_single_region_segmentations(
-            feature_dict=feature_dict, eigs_dict=eigs_dict
-        )
-        # Bounding boxes
-        bbox_2 = extract.extract_bboxes(feature_dict=feature_dict, segmap=segmap_2)
-
-        if not bbox_2['bboxes']:
-            return bbox_orig_res, []
-        else:
-            bbox_orig_res_2 = (
-            np.array(bbox_2["bboxes_original_resolution"][0]) / self.downscale_factor
+                np.array(bbox["bboxes_original_resolution"][0]) / self.downscale_factor
             )
-            return bbox_orig_res, bbox_orig_res_2
+        return bbox_orig_res

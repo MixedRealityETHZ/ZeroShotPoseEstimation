@@ -73,6 +73,7 @@ def gaussian_fitting(
     fit += -np.min(fit)
     fit /= np.max(fit)
 
+    #Check the eigenvectors 
     '''
     fit_2 = fit.copy()
     eigs = eigenvector.reshape(H_patch, W_patch)
