@@ -113,7 +113,7 @@ def sfm(cfg):
     """Reconstruct and postprocess sparse object point cloud, and store point cloud features"""
     data_dirs = cfg.dataset.data_dir
     down_ratio = cfg.sfm.down_ratio
-    crop_images = False
+    crop_images = True
     data_dirs = [data_dirs] if isinstance(data_dirs, str) else data_dirs
 
     for data_dir in data_dirs:
