@@ -38,7 +38,9 @@ def pose_distance(pose1, pose2):
   pos_dist = math.sqrt((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)
   
   # Compute the orientation distance
-  orient_dist = math.sqrt((roll1 - roll2)**2 + (pitch1 - pitch2)**2 + (yaw1 - yaw2)**2)
+  R = pose1[0:3,0:3] @ pose2[0:3,0:3].T
+  orient_dist_rpy = math.sqrt((roll1 - roll2)**2 + (pitch1 - pitch2)**2 + (yaw1 - yaw2)**2)
+  orient_dist = np.arccos((np.trace(R)-1)/2)
   
   # Return the total distance
   return pos_dist, orient_dist
