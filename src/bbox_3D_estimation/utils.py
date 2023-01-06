@@ -92,7 +92,7 @@ class Detector3D:
     def save_dimensions(self, data_root):
         np.savetxt(data_root + "/box3d_dimensions.txt", self.axes, delimiter=" ")
 
-    def plot_3D_bb(self, poses):
+    def plot_3D_bb(self, poses, GT_points=None):
         plot_3D_scene(
             estQs=self.estQs,
             gtQs=None,
@@ -100,7 +100,7 @@ class Detector3D:
             dataset="tiger",
             save_output_images=True,
             points=self.points,
-            GT_points=None 
+            GT_points=GT_points 
         )
         plt.show()
 
@@ -111,17 +111,19 @@ def predict_3D_bboxes(
     poses_paths,
     data_root,
     seq_dir,
+    filter,
     step=1,
     downscale_factor=0.6,
     compute_on_GPU="cpu",
     hololens=False
+    
 ):  
     full_res_img_paths = sort_path_list(full_res_img_paths)
     poses_paths = sort_path_list(poses_paths)
     _K, _ = data_utils.get_K(intrisics_path) 
 
     DetectorBox3D = Detector3D(_K)
-    BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, device=compute_on_GPU, filter = True)
+    BboxPredictor = UnsupBbox(downscale_factor=downscale_factor, device=compute_on_GPU, filter = filter)
 
 
     for id, img_path in enumerate(tqdm(full_res_img_paths)):
@@ -135,6 +137,7 @@ def predict_3D_bboxes(
             bbox_orig_res = BboxPredictor.infer_2d_bbox(image=image, K=_K)
 
             
+            '''
             ##--------Plotting the RGB image---------
             image_2 = image.copy()
             limits = bbox_orig_res
@@ -149,10 +152,10 @@ def predict_3D_bboxes(
             # Draw a rectangle with blue line borders of thickness of 2 px
             image_2 = cv2.rectangle(image_2, start_point, end_point, color, thickness)
 
-           
             cv2.imshow("Image", image_2)
             #cv2.imwrite('/Users/diego/Desktop/Escritorio_MacBook_Pro_de_Diego/ETH/Third_Semester/Mixed_Reality/Real_2/ZeroShotPoseEstimation/data/onepose_datasets/val_data/0620-dinosaurcup-bottle/dinosaurcup-1/detection_2/'+str(id)+ '.jpg', image_2)
             cv2.waitKey(1)
+            '''
             
             
             #1 is for the bbox without a filter, 0 is with filter
@@ -172,8 +175,12 @@ def predict_3D_bboxes(
         else:
             poses_t = np.vstack((poses_t, poses))
 
-    DetectorBox3D.plot_3D_bb(poses_t)
-    print("-------Predict 3D bboxes finished-------")
+    #DetectorBox3D.plot_3D_bb(poses_t)
+    #print("-------Predict 3D bboxes finished-------")
+
+    GT_points = np.loadtxt(data_root + "/box3d_corners_GT.txt")
+
+    DetectorBox3D.plot_3D_bb(poses_t, GT_points=GT_points)
 
 def sort_path_list(path_list):
     files = {int(Path(file).stem): file for file in path_list}

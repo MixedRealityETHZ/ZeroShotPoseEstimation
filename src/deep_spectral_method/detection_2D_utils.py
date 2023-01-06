@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 
 
 class UnsupBbox:
-    def __init__(self, downscale_factor=0.6, device="cpu", filter = False) -> None:
+    def __init__(self, downscale_factor=0.3, device="cpu", filter = False) -> None:
+        #Filter needs a bigger image
         if filter:
             downscale_factor=0.6
         self.model_name = "dino_vits16"
@@ -18,6 +19,7 @@ class UnsupBbox:
         self.downscale_factor = downscale_factor
         self.device = device
         self.fitting_model = lmfit.models.Gaussian2dModel() #Model to fit the gaussian curve
+        self.filter = filter
 
         if device=="cpu":
             self.on_GPU = False
@@ -65,7 +67,7 @@ class UnsupBbox:
         eigs_dict_gaussian = eigs_dict.copy()
 
         #Use of the filter, by default is set to False
-        if filter:
+        if self.filter:
             # small segmentation, use of fitting curve
             segmap = extract.gaussian_fitting(
             feature_dict=feature_dict,
@@ -77,8 +79,6 @@ class UnsupBbox:
             feature_dict=feature_dict,
             segmap=segmap,
             )
-            print("Filter")
-            print(bbox['bboxes'])
             
             #If we cannot find a solution with the filter then use the original bbox
             if not bbox['bboxes']:
@@ -89,7 +89,6 @@ class UnsupBbox:
                 # Bounding boxes
                 bbox = extract.extract_bboxes(feature_dict=feature_dict, segmap=segmap)
             
-            
         else:
 
             # small Segmentation
@@ -99,7 +98,10 @@ class UnsupBbox:
             # Bounding boxes
             bbox = extract.extract_bboxes(feature_dict=feature_dict, segmap=segmap)
         
-        bbox_orig_res = (
+        self.bbox_orig_res = (
                 np.array(bbox["bboxes_original_resolution"][0]) / self.downscale_factor
             )
-        return bbox_orig_res
+        return self.bbox_orig_res
+
+    def save_2d_bbox(self, file_path):
+        np.savetxt(file_path, self.bbox_orig_res, delimiter=" ")
